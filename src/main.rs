@@ -26,8 +26,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         &input_device,
         &config,
         move |data: &[f32], _: &cpal::InputCallbackInfo| {
-            for s in data.to_vec() {
-                tx.send(s).unwrap();
+            for sample in data.to_vec() {
+                tx.send(sample).expect("TODO: panic message");
             }
         },
         move |_err| {},
@@ -41,7 +41,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         .build_output_stream(
             &config,
             move |output: &mut [f32], _| {
-                let chunk = rx.recv().unwrap();
                 for sample in output {
                     *sample = rx.recv().unwrap();
                 }
