@@ -5,9 +5,13 @@ use std::ops::Deref;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
+use tokio::sync::broadcast;
+use tokio::sync::broadcast::error::RecvError;
 
 type Chunk = Vec<f32>;
-fn main() -> Result<(), Box<dyn Error>> {
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
     let host = cpal::default_host();
     let input_device = host
         .default_input_device()
@@ -20,7 +24,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut config: cpal::StreamConfig = supported_config.into();
     config.sample_rate = cpal::SampleRate(44_100);
 
-    let (tx, rx) = mpsc::channel::<f32>();
+    let (tx, mut rx) = broadcast::channel::<f32>(4800);
 
     let input_stream = cpal::Device::build_input_stream(
         &input_device,
@@ -41,8 +45,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         .build_output_stream(
             &config,
             move |output: &mut [f32], _| {
-                for sample in output {
-                    *sample = rx.recv().unwrap();
+                for output_sample in output {
+                    // This had better be zero cost >.>
+                    match futures::executor::block_on(rx.recv()) {
+                        Ok(sample) => {
+                            *output_sample = sample;
+                        }
+                        Err(_) => {}
+                    }
                 }
             },
             |_| {},
