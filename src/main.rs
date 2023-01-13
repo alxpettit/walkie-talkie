@@ -24,7 +24,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut config: cpal::StreamConfig = supported_config.into();
     config.sample_rate = cpal::SampleRate(44_100);
 
-    let (tx, mut rx) = broadcast::channel::<f32>(4800);
+    let (tx, mut rx) = broadcast::channel::<f32>(480000);
 
     let input_stream = cpal::Device::build_input_stream(
         &input_device,
