@@ -4,6 +4,7 @@ use cpal::{Device, StreamConfig};
 use futures::executor::block_on;
 use futures::{pin_mut, StreamExt};
 use futures_core::Stream;
+use nnnoiseless::dasp::Signal;
 use nnnoiseless::DenoiseState;
 use std::error::Error;
 use std::future::Future;
@@ -66,13 +67,14 @@ fn getstream_denoise<S: Stream<Item = f32> + Unpin>(mut input: S) -> impl Stream
     }
 }
 
-async fn stream_to_speaker<S: Stream<Item = f32> + Unpin>(
+fn stream_to_speaker<S: Stream<Item = f32> + Unpin>(
     config: StreamConfig,
     output_device: Device,
     mut input: S,
-) {
-    let (tx, rx) = mpsc::channel::<f32>();
-    let out_stream = output_device
+) -> impl Stream<Item = f32> {
+    stream! {
+        let (tx, rx) = mpsc::channel::<f32>();
+        let out_stream = output_device
         .build_output_stream(
             &config,
             move |output: &mut [f32], _| {
@@ -85,16 +87,18 @@ async fn stream_to_speaker<S: Stream<Item = f32> + Unpin>(
         )
         .expect("TODO: panic message");
 
-    out_stream.play().unwrap();
+        out_stream.play().unwrap();
 
-    loop {
-        match input.next().await {
-            Some(sample) => {
-                tx.send(sample)
-                    .expect("Could not send to internal MPSC channel.");
-            }
-            None => {
-                //println!(":(");
+        loop {
+            match input.next().await {
+                Some(sample) => {
+                    yield sample;
+                    if tx.send(sample).is_err() {
+                        println!("Could not send to internal MPSC channel...")
+                    }
+                }
+                None => {
+                }
             }
         }
     }
@@ -123,10 +127,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .default_output_device()
         .ok_or("No default output device available!")?;
 
-    stream_to_speaker(config, output_device, denoised_mic_stream).await;
-
-    loop {
-        thread::sleep(Duration::from_secs(10000));
+    let stream_to_speaker = stream_to_speaker(config, output_device, denoised_mic_stream);
+    pin_mut!(stream_to_speaker);
+    while let Some(i) = stream_to_speaker.next().await {
+        // println!("{}", i);
     }
+
+    // loop {
+    //     thread::sleep(Duration::from_secs(100));
+    // }
     Ok(())
 }
