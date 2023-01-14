@@ -43,7 +43,7 @@ impl MicStream {
             &config,
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
                 for sample in data.to_vec() {
-                    self.tx.send(sample.clone()).expect("Error sending");
+                    sender.send(sample.clone()).expect("Error sending");
                 }
             },
             move |_err| {},
