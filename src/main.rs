@@ -1,12 +1,13 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::{Device, StreamConfig};
 use futures::executor::block_on;
 use nnnoiseless::DenoiseState;
 use std::error::Error;
 use std::hash::Hasher;
 use std::ops::Deref;
 use std::sync::{mpsc, Arc};
-use std::thread;
 use std::time::Duration;
+use std::{sync, thread};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::{broadcast, RwLock};
@@ -22,6 +23,37 @@ impl MyDefault for [f32; DenoiseState::FRAME_SIZE] {
         [0.; DenoiseState::FRAME_SIZE]
     }
 }
+
+struct MicStream {
+    tx: Sender<f32>,
+    rx: Receiver<f32>,
+}
+
+impl MicStream {
+    fn new(capacity: usize) -> Self {
+        match broadcast::channel::<f32>(capacity) {
+            (tx, rx) => Self { tx, rx },
+        }
+    }
+
+    fn play(&self, config: &StreamConfig, input_device: &Device) -> Result<(), Box<dyn Error>> {
+        let sender = self.tx.clone();
+        let input_stream = cpal::Device::build_input_stream(
+            &input_device,
+            &config,
+            move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                for sample in data.to_vec() {
+                    self.tx.send(sample.clone()).expect("Error sending");
+                }
+            },
+            move |_err| {},
+        )
+        .unwrap();
+        input_stream.play()?;
+        Ok(())
+    }
+}
+
 fn denoise_stream(mut rx: Receiver<f32>) -> Receiver<f32> {
     let denoise = RwLock::new(DenoiseState::new());
     let (out_tx, mut out_rx) = tokio::sync::broadcast::channel::<f32>(100000);
@@ -55,22 +87,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut config: cpal::StreamConfig = supported_config.into();
     config.sample_rate = cpal::SampleRate(44_100);
 
-    let (tx, mut rx) = broadcast::channel::<f32>(480000);
-    let rx_denoise = tx.subscribe();
+    let mut mic_stream = MicStream::new(100000);
+    mic_stream.play(&config, &input_device)?;
 
-    let input_stream = cpal::Device::build_input_stream(
-        &input_device,
-        &config,
-        move |data: &[f32], _: &cpal::InputCallbackInfo| {
-            for sample in data.to_vec() {
-                tx.send(sample).expect("TODO: panic message");
-            }
-        },
-        move |_err| {},
-    )?;
-    input_stream.play().expect("TODO: panic message");
-
-    let mut denoise_rx = denoise_stream(rx_denoise);
+    let rx_mic = mic_stream.tx.subscribe();
+    let mut denoise_rx = denoise_stream(rx_mic);
 
     let output_device = host
         .default_output_device()
@@ -85,7 +106,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     // This had better be zero cost >.>
                     match futures::executor::block_on(denoise_rx.recv()) {
                         Ok(sample) => {
-                            println!("{}", sample);
+                            //println!("{}", sample);
                             *output_sample = sample;
                         }
                         Err(_) => {}
