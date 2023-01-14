@@ -50,22 +50,23 @@ pub fn getstream_mic_input(
 }
 
 fn getstream_denoise<S: Stream<Item = f32> + Unpin>(mut input: S) -> impl Stream<Item = f32> {
-    let denoise = RwLock::new(DenoiseState::new());
+    let denoise = std::sync::RwLock::new(DenoiseState::new());
+    let mut frame_output: [f32; DenoiseState::FRAME_SIZE] = MyDefault::default();
+    let mut frame_input: [f32; DenoiseState::FRAME_SIZE] = MyDefault::default();
     stream! {
-        let mut frame_output: [f32; DenoiseState::FRAME_SIZE] = MyDefault::default();
-        let mut frame_input: [f32; DenoiseState::FRAME_SIZE] = MyDefault::default();
-        for s in &mut frame_input {
-            *s = input.next().await.unwrap() * 32768.0;
-        }
-
-        block_on(denoise.write()).process_frame(&mut frame_output, &mut frame_input);
-        for s in &frame_output {
-            yield *s / 32768.0;
+    loop {
+            for s in &mut frame_input {
+                *s = input.next().await.unwrap() * 32768.0;
+            }
+            denoise.write().unwrap().process_frame(&mut frame_output, &mut frame_input);
+            for s in &frame_output {
+                yield *s / 32768.0;
+            }
         }
     }
 }
 
-fn stream_to_speaker<S: Stream<Item = f32> + Unpin>(
+async fn stream_to_speaker<S: Stream<Item = f32> + Unpin>(
     config: StreamConfig,
     output_device: Device,
     mut input: S,
@@ -87,7 +88,15 @@ fn stream_to_speaker<S: Stream<Item = f32> + Unpin>(
     out_stream.play().unwrap();
 
     loop {
-        tx.send(block_on(input.next()).unwrap()).unwrap();
+        match input.next().await {
+            Some(sample) => {
+                tx.send(sample)
+                    .expect("Could not send to internal MPSC channel.");
+            }
+            None => {
+                //println!(":(");
+            }
+        }
     }
 }
 
@@ -114,7 +123,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .default_output_device()
         .ok_or("No default output device available!")?;
 
-    stream_to_speaker(config, output_device, denoised_mic_stream);
+    stream_to_speaker(config, output_device, denoised_mic_stream).await;
 
     loop {
         thread::sleep(Duration::from_secs(10000));
