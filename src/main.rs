@@ -79,13 +79,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .build_output_stream(
             &config,
             move |output: &mut [f32], _| {
-                //  let mut dnoise_ptr_rw = denoise_ptr.blocking_write();
-                //    let chunk = rx.recv().iter();
                 for output_sample in output {
                     // This had better be zero cost >.>
                     match futures::executor::block_on(denoise_rx.recv()) {
                         Ok(sample) => {
-                            println!("{}", sample);
                             *output_sample = sample;
                         }
                         Err(_) => {}
