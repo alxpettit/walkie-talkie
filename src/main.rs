@@ -4,11 +4,11 @@ use nnnoiseless::DenoiseState;
 use std::error::Error;
 use std::hash::Hasher;
 use std::ops::Deref;
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::Duration;
 use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::{broadcast, RwLock};
 
 type Chunk = Vec<f32>;
@@ -22,14 +22,15 @@ impl MyDefault for [f32; DenoiseState::FRAME_SIZE] {
         [0.; DenoiseState::FRAME_SIZE]
     }
 }
+
 fn denoise_stream(mut rx: Receiver<f32>) -> Receiver<f32> {
     let denoise = RwLock::new(DenoiseState::new());
-    let (out_tx, mut out_rx) = tokio::sync::broadcast::channel::<f32>(100000);
+    let (out_tx, mut out_rx) = mpsc::channel::<f32>();
     let handle = thread::spawn(move || loop {
         let mut frame_output: [f32; DenoiseState::FRAME_SIZE] = MyDefault::default();
         let mut frame_input: [f32; DenoiseState::FRAME_SIZE] = MyDefault::default();
         for s in &mut frame_input {
-            *s = block_on(rx.recv()).unwrap() * 32768.0;
+            *s = rx.recv().unwrap() * 32768.0;
         }
 
         block_on(denoise.write()).process_frame(&mut frame_output, &mut frame_input);
@@ -55,8 +56,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut config: cpal::StreamConfig = supported_config.into();
     config.sample_rate = cpal::SampleRate(44_100);
 
-    let (tx, mut rx) = broadcast::channel::<f32>(480000);
-    let rx_denoise = tx.subscribe();
+    let (tx, mut rx) = mpsc::channel::<f32>();
 
     let input_stream = cpal::Device::build_input_stream(
         &input_device,
@@ -70,7 +70,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     )?;
     input_stream.play().expect("TODO: panic message");
 
-    let mut denoise_rx = denoise_stream(rx_denoise);
+    let mut denoise_rx = denoise_stream(rx);
 
     let output_device = host
         .default_output_device()
@@ -81,7 +81,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             move |output: &mut [f32], _| {
                 for output_sample in output {
                     // This had better be zero cost >.>
-                    match futures::executor::block_on(denoise_rx.recv()) {
+                    match denoise_rx.recv() {
                         Ok(sample) => {
                             *output_sample = sample;
                         }
