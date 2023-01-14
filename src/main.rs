@@ -1,14 +1,45 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use futures::executor::block_on;
 use nnnoiseless::DenoiseState;
 use std::error::Error;
+use std::hash::Hasher;
 use std::ops::Deref;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::Duration;
-use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::broadcast::{Receiver, Sender};
+use tokio::sync::{broadcast, RwLock};
 
 type Chunk = Vec<f32>;
+
+trait MyDefault {
+    fn default() -> Self;
+}
+
+impl MyDefault for [f32; DenoiseState::FRAME_SIZE] {
+    fn default() -> Self {
+        [0.; DenoiseState::FRAME_SIZE]
+    }
+}
+fn denoise_stream(mut rx: Receiver<f32>) -> Receiver<f32> {
+    let denoise = RwLock::new(DenoiseState::new());
+    let (out_tx, mut out_rx) = tokio::sync::broadcast::channel::<f32>(100000);
+    let handle = thread::spawn(move || loop {
+        let mut frame_output: [f32; DenoiseState::FRAME_SIZE] = MyDefault::default();
+        let mut frame_input: [f32; DenoiseState::FRAME_SIZE] = MyDefault::default();
+        for s in &mut frame_input {
+            *s = block_on(rx.recv()).unwrap() * 32768.0;
+        }
+
+        block_on(denoise.write()).process_frame(&mut frame_output, &mut frame_input);
+        for s in &frame_output {
+            out_tx.send(*s / 32768.0).unwrap();
+        }
+    });
+
+    out_rx
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -25,6 +56,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     config.sample_rate = cpal::SampleRate(44_100);
 
     let (tx, mut rx) = broadcast::channel::<f32>(480000);
+    let rx_denoise = tx.subscribe();
 
     let input_stream = cpal::Device::build_input_stream(
         &input_device,
@@ -38,6 +70,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     )?;
     input_stream.play().expect("TODO: panic message");
 
+    let mut denoise_rx = denoise_stream(rx_denoise);
+
     let output_device = host
         .default_output_device()
         .ok_or("No default output device available!")?;
@@ -45,10 +79,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .build_output_stream(
             &config,
             move |output: &mut [f32], _| {
+                //  let mut dnoise_ptr_rw = denoise_ptr.blocking_write();
+                //    let chunk = rx.recv().iter();
                 for output_sample in output {
                     // This had better be zero cost >.>
-                    match futures::executor::block_on(rx.recv()) {
+                    match futures::executor::block_on(denoise_rx.recv()) {
                         Ok(sample) => {
+                            println!("{}", sample);
                             *output_sample = sample;
                         }
                         Err(_) => {}
