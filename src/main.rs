@@ -1,4 +1,5 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::{Device, StreamConfig};
 use futures::executor::block_on;
 use nnnoiseless::DenoiseState;
 use std::error::Error;
@@ -42,6 +43,25 @@ fn denoise_stream(mut rx: Receiver<f32>) -> Receiver<f32> {
     out_rx
 }
 
+fn mic_stream(config: &StreamConfig, input_device: &Device) -> Receiver<f32> {
+    let (tx, rx) = mpsc::channel::<f32>();
+
+    let input_stream = cpal::Device::build_input_stream(
+        &input_device,
+        &config,
+        move |data: &[f32], _: &cpal::InputCallbackInfo| {
+            for sample in data.to_vec() {
+                tx.send(sample).expect("TODO: panic message");
+            }
+        },
+        move |_err| {},
+    )
+    .expect("Failed to make stream");
+    input_stream.play().expect("TODO: panic message");
+
+    rx
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let host = cpal::default_host();
@@ -56,21 +76,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut config: cpal::StreamConfig = supported_config.into();
     config.sample_rate = cpal::SampleRate(44_100);
 
-    let (tx, mut rx) = mpsc::channel::<f32>();
-
-    let input_stream = cpal::Device::build_input_stream(
-        &input_device,
-        &config,
-        move |data: &[f32], _: &cpal::InputCallbackInfo| {
-            for sample in data.to_vec() {
-                tx.send(sample).expect("TODO: panic message");
-            }
-        },
-        move |_err| {},
-    )?;
-    input_stream.play().expect("TODO: panic message");
-
-    let mut denoise_rx = denoise_stream(rx);
+    let rx = mic_stream(&config, &input_device);
+    //   let denoise_rx = denoise_stream(rx);
 
     let output_device = host
         .default_output_device()
@@ -81,7 +88,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             move |output: &mut [f32], _| {
                 for output_sample in output {
                     // This had better be zero cost >.>
-                    match denoise_rx.recv() {
+                    match rx.recv() {
                         Ok(sample) => {
                             *output_sample = sample;
                         }
