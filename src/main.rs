@@ -1,7 +1,7 @@
 use async_stream::try_stream;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, StreamConfig};
-use denoise::{DefaultDenoise, DenoiseChunk};
+use denoise::DenoiseChunk;
 use futures::{pin_mut, StreamExt};
 use futures_core::Stream;
 use nnnoiseless::DenoiseState;
@@ -32,6 +32,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let mic_stream = mic::getstream_from_mic(config.clone(), input_device);
     pin_mut!(mic_stream);
+
     let denoised_mic_stream = denoise::getstream_denoise(mic_stream);
     pin_mut!(denoised_mic_stream);
     //
