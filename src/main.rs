@@ -53,18 +53,21 @@ pub fn getstream_mic_input(
 fn getstream_denoise<S: Stream<Item = Result<f32, Box<dyn Error>>> + Unpin>(
     mut input: S,
 ) -> impl Stream<Item = Result<f32, Box<dyn Error>>> {
-    stream! {
-        let mut denoise = DenoiseState::new();
-        let mut frame_output: [f32; DenoiseState::FRAME_SIZE] = MyDefault::default();
-        let mut frame_input: [f32; DenoiseState::FRAME_SIZE] = MyDefault::default();
-        while let Some(input) = input.next().await {
-            let inp = input?;
+    let denoise = std::sync::RwLock::new(DenoiseState::new());
+    let mut frame_output: [f32; DenoiseState::FRAME_SIZE] = MyDefault::default();
+    let mut frame_input: [f32; DenoiseState::FRAME_SIZE] = MyDefault::default();
+    try_stream! {
+        'outer: loop {
             for s in &mut frame_input {
-                *s = inp * 32768.0;
+                if let Some(next) = input.next().await {
+                    *s = next? * 32768.0;
+                } else {
+                    break 'outer;
+                }
             }
-            denoise.process_frame(&mut frame_output, &mut frame_input);
+            denoise.write().unwrap().process_frame(&mut frame_output, &mut frame_input);
             for s in &frame_output {
-                yield Ok(*s / 32768.0);
+                yield *s / 32768.0;
             }
         }
     }
@@ -124,10 +127,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let stream_to_speaker = stream_to_speaker(config, output_device, denoised_mic_stream);
     pin_mut!(stream_to_speaker);
     while let Some(i) = stream_to_speaker.next().await {
-        // if let Err(e) = i {
-        //     println!("{}", e);
-        // }
-        println!("{}", i.unwrap());
+        if let Err(e) = i {
+            println!("{}", e);
+        }
+        //println!("{}", i.unwrap());
     }
     Ok(())
 }
