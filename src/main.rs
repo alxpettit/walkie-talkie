@@ -1,4 +1,4 @@
-use async_stream::stream;
+use async_stream::{stream, try_stream};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, StreamConfig};
 use futures::executor::block_on;
@@ -33,16 +33,16 @@ impl MyDefault for [f32; DenoiseState::FRAME_SIZE] {
 pub fn getstream_mic_input(
     config: cpal::StreamConfig,
     input_device: cpal::Device,
-) -> impl Stream<Item = f32> {
-    stream! {
+) -> impl Stream<Item = Result<f32, Box<dyn Error>>> {
+    try_stream! {
         let (tx, rx) = mpsc::channel::<Chunk>();
 
         let input_stream = cpal::Device::build_input_stream(
             &input_device, &config,  move |data: &[f32], _: &cpal::InputCallbackInfo| {
             tx.send(data.to_vec()).unwrap();
-        }, move |_err| {}).expect("Failed to make stream :(");
+        }, move |_err| {})?;
 
-        input_stream.play().expect("Failed to play stream");
+        input_stream.play()?;
 
         for data in rx {
             for sample in data {yield sample;}
@@ -50,28 +50,30 @@ pub fn getstream_mic_input(
     }
 }
 
-fn getstream_denoise<S: Stream<Item = f32> + Unpin>(mut input: S) -> impl Stream<Item = f32> {
+fn getstream_denoise<S: Stream<Item = Result<f32, Box<dyn Error>>> + Unpin>(
+    mut input: S,
+) -> impl Stream<Item = Result<f32, Box<dyn Error>>> {
     let denoise = std::sync::RwLock::new(DenoiseState::new());
     let mut frame_output: [f32; DenoiseState::FRAME_SIZE] = MyDefault::default();
     let mut frame_input: [f32; DenoiseState::FRAME_SIZE] = MyDefault::default();
     stream! {
     loop {
             for s in &mut frame_input {
-                *s = input.next().await.unwrap() * 32768.0;
+                *s = input.next().await.ok_or("Could not get next() from stream.")?? * 32768.0;
             }
             denoise.write().unwrap().process_frame(&mut frame_output, &mut frame_input);
             for s in &frame_output {
-                yield *s / 32768.0;
+                yield Ok(*s / 32768.0);
             }
         }
     }
 }
 
-fn stream_to_speaker<S: Stream<Item = f32> + Unpin>(
+fn stream_to_speaker<S: Stream<Item = Result<f32, Box<dyn Error>>> + Unpin>(
     config: StreamConfig,
     output_device: Device,
     mut input: S,
-) -> impl Stream<Item = f32> {
+) -> impl Stream<Item = Result<f32, Box<dyn Error>>> {
     stream! {
         let (tx, rx) = mpsc::channel::<f32>();
         let out_stream = output_device
@@ -92,10 +94,10 @@ fn stream_to_speaker<S: Stream<Item = f32> + Unpin>(
         loop {
             match input.next().await {
                 Some(sample) => {
-                    yield sample;
-                    if tx.send(sample).is_err() {
+                    if tx.send(sample?).is_err() {
                         println!("Could not send to internal MPSC channel...")
                     }
+                    yield sample;
                 }
                 None => {
                 }
