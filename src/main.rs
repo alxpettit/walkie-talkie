@@ -1,22 +1,11 @@
-use async_stream::{stream, try_stream};
+use async_stream::try_stream;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, StreamConfig};
-use futures::executor::block_on;
 use futures::{pin_mut, StreamExt};
 use futures_core::Stream;
-use nnnoiseless::dasp::Signal;
 use nnnoiseless::DenoiseState;
 use std::error::Error;
-use std::future::Future;
-use std::hash::Hasher;
-use std::ops::Deref;
-use std::pin::Pin;
-use std::sync::{mpsc, Arc};
-use std::thread;
-use std::time::Duration;
-use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::broadcast::{Receiver, Sender};
-use tokio::sync::{broadcast, RwLock};
+use std::sync::mpsc;
 
 type Chunk = Vec<f32>;
 
