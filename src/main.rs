@@ -45,7 +45,7 @@ pub fn getstream_mic_input(
         input_stream.play()?;
 
         for data in rx {
-            for sample in data {yield sample;}
+            for sample in data { yield sample; }
         }
     }
 }
@@ -53,18 +53,18 @@ pub fn getstream_mic_input(
 fn getstream_denoise<S: Stream<Item = Result<f32, Box<dyn Error>>> + Unpin>(
     mut input: S,
 ) -> impl Stream<Item = Result<f32, Box<dyn Error>>> {
-    let denoise = std::sync::RwLock::new(DenoiseState::new());
-    let mut frame_output: [f32; DenoiseState::FRAME_SIZE] = MyDefault::default();
-    let mut frame_input: [f32; DenoiseState::FRAME_SIZE] = MyDefault::default();
-    try_stream! {
+    stream! {
+        let mut denoise = DenoiseState::new();
+        let mut frame_output: [f32; DenoiseState::FRAME_SIZE] = MyDefault::default();
+        let mut frame_input: [f32; DenoiseState::FRAME_SIZE] = MyDefault::default();
         while let Some(input) = input.next().await {
             let inp = input?;
             for s in &mut frame_input {
                 *s = inp * 32768.0;
             }
-            denoise.write().unwrap().process_frame(&mut frame_output, &mut frame_input);
+            denoise.process_frame(&mut frame_output, &mut frame_input);
             for s in &frame_output {
-                yield *s / 32768.0;
+                yield Ok(*s / 32768.0);
             }
         }
     }
@@ -82,7 +82,6 @@ fn stream_to_speaker<S: Stream<Item = Result<f32, Box<dyn Error>>> + Unpin>(
             &config,
             move |output: &mut [f32], _| {
                 for output_sample in output {
-                    // This had better be zero cost >.>
                     *output_sample = rx.recv().unwrap();
                 }
             },
@@ -113,11 +112,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut config: cpal::StreamConfig = supported_config.into();
     config.sample_rate = cpal::SampleRate(44_100);
 
-    let mut mic_stream = getstream_mic_input(config.clone(), input_device);
+    let mic_stream = getstream_mic_input(config.clone(), input_device);
     pin_mut!(mic_stream);
-    let mut denoised_mic_stream = getstream_denoise(mic_stream);
+    let denoised_mic_stream = getstream_denoise(mic_stream);
     pin_mut!(denoised_mic_stream);
-
+    //
     let output_device = host
         .default_output_device()
         .ok_or("No default output device available!")?;
@@ -125,9 +124,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let stream_to_speaker = stream_to_speaker(config, output_device, denoised_mic_stream);
     pin_mut!(stream_to_speaker);
     while let Some(i) = stream_to_speaker.next().await {
-        if let Err(e) = i {
-            println!("{}", e);
-        }
+        // if let Err(e) = i {
+        //     println!("{}", e);
+        // }
+        println!("{}", i.unwrap());
     }
     Ok(())
 }
