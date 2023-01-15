@@ -31,24 +31,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2cb2f989d18dd141ab8ae82f64d1a8cdd37e0840f73a406896cf5e99502fab61"
 
 [[package]]
-name = "async-stream"
-version = "0.3.3"
+name = "async-fn-stream"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dad5c83079eae9969be7fadefe640a1c566901f05ff91ab221de4b6f68d9507e"
+checksum = "1d5f39746cfb8c7686cc5da3be489d066b2dee606e6e0daec64e59657f016be7"
 dependencies = [
- "async-stream-impl",
- "futures-core",
-]
-
-[[package]]
-name = "async-stream-impl"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10f203db73a71dfa2fb6dd22763990fa26f3d2625a6da2da900d23b87d26be27"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
+ "futures",
+ "pin-project-lite",
 ]
 
 [[package]]
@@ -1282,7 +1271,7 @@ dependencies = [
 name = "walkie-talkie"
 version = "0.1.0"
 dependencies = [
- "async-stream",
+ "async-fn-stream",
  "cpal",
  "futures",
  "futures-core",
