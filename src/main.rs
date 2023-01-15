@@ -1,3 +1,5 @@
+#![feature(slice_as_chunks)]
+
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, StreamConfig};
 use denoise::DenoiseChunk;
