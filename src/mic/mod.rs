@@ -20,6 +20,10 @@ pub fn getstream_from_mic(
                     tx.send(*chunk).unwrap();
                 }
                 let mut final_frame = [0f32; 8];
+                // If we do this, it fills our stream with garbage...
+                // we gotta prevent that by doing something like waiting for the next segment and building the rest from there
+                // Or, resorting to TinyVec or something.
+                // Ideally, no dynamic allocation ;)
                 for (i, s) in remainder.iter().enumerate() {
                     final_frame[i] = *s;
                 }
