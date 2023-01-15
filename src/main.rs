@@ -56,14 +56,15 @@ fn getstream_denoise<S: Stream<Item = Result<f32, Box<dyn Error>>> + Unpin>(
     let denoise = std::sync::RwLock::new(DenoiseState::new());
     let mut frame_output: [f32; DenoiseState::FRAME_SIZE] = MyDefault::default();
     let mut frame_input: [f32; DenoiseState::FRAME_SIZE] = MyDefault::default();
-    stream! {
-    loop {
+    try_stream! {
+        while let Some(input) = input.next().await {
+            let inp = input?;
             for s in &mut frame_input {
-                *s = input.next().await.ok_or("Could not get next() from stream.")?? * 32768.0;
+                *s = inp * 32768.0;
             }
             denoise.write().unwrap().process_frame(&mut frame_output, &mut frame_input);
             for s in &frame_output {
-                yield Ok(*s / 32768.0);
+                yield *s / 32768.0;
             }
         }
     }
@@ -74,8 +75,8 @@ fn stream_to_speaker<S: Stream<Item = Result<f32, Box<dyn Error>>> + Unpin>(
     output_device: Device,
     mut input: S,
 ) -> impl Stream<Item = Result<f32, Box<dyn Error>>> {
-    stream! {
-        let (tx, rx) = mpsc::channel::<f32>();
+    let (tx, rx) = mpsc::channel::<f32>();
+    try_stream! {
         let out_stream = output_device
         .build_output_stream(
             &config,
@@ -86,22 +87,14 @@ fn stream_to_speaker<S: Stream<Item = Result<f32, Box<dyn Error>>> + Unpin>(
                 }
             },
             |_| {},
-        )
-        .expect("TODO: panic message");
+        )?;
 
-        out_stream.play().unwrap();
+        out_stream.play()?;
 
-        loop {
-            match input.next().await {
-                Some(sample) => {
-                    if tx.send(sample?).is_err() {
-                        println!("Could not send to internal MPSC channel...")
-                    }
-                    yield sample;
-                }
-                None => {
-                }
-            }
+        while let Some(next_input) = input.next().await {
+            let inp: f32 = next_input?;
+            tx.send(inp)?;
+            yield inp;
         }
     }
 }
@@ -132,11 +125,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let stream_to_speaker = stream_to_speaker(config, output_device, denoised_mic_stream);
     pin_mut!(stream_to_speaker);
     while let Some(i) = stream_to_speaker.next().await {
-        // println!("{}", i);
+        if let Err(e) = i {
+            println!("{}", e);
+        }
     }
-
-    // loop {
-    //     thread::sleep(Duration::from_secs(100));
-    // }
     Ok(())
 }
