@@ -1,94 +1,20 @@
 use async_stream::try_stream;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, StreamConfig};
+use denoise::{DefaultDenoise, DenoiseChunk};
 use futures::{pin_mut, StreamExt};
 use futures_core::Stream;
 use nnnoiseless::DenoiseState;
+use pcmtypes::PCMResult;
 use std::error::Error;
 use std::sync::mpsc;
 
-type Chunk = Vec<f32>;
+mod denoise;
+mod mic;
+mod pcmtypes;
+mod speaker;
 
-trait MyDefault {
-    fn default() -> Self;
-}
-
-impl MyDefault for [f32; DenoiseState::FRAME_SIZE] {
-    fn default() -> Self {
-        [0.; DenoiseState::FRAME_SIZE]
-    }
-}
-
-pub fn getstream_mic_input(
-    config: cpal::StreamConfig,
-    input_device: cpal::Device,
-) -> impl Stream<Item = Result<f32, Box<dyn Error>>> {
-    try_stream! {
-        let (tx, rx) = mpsc::channel::<Chunk>();
-
-        let input_stream = cpal::Device::build_input_stream(
-            &input_device, &config,  move |data: &[f32], _: &cpal::InputCallbackInfo| {
-            tx.send(data.to_vec()).unwrap();
-        }, move |_err| {})?;
-
-        input_stream.play()?;
-
-        for data in rx {
-            for sample in data { yield sample; }
-        }
-    }
-}
-
-fn getstream_denoise<S: Stream<Item = Result<f32, Box<dyn Error>>> + Unpin>(
-    mut input: S,
-) -> impl Stream<Item = Result<f32, Box<dyn Error>>> {
-    let denoise = std::sync::RwLock::new(DenoiseState::new());
-    let mut frame_output: [f32; DenoiseState::FRAME_SIZE] = MyDefault::default();
-    let mut frame_input: [f32; DenoiseState::FRAME_SIZE] = MyDefault::default();
-    try_stream! {
-        'outer: loop {
-            for s in &mut frame_input {
-                if let Some(next) = input.next().await {
-                    *s = next? * 32768.0;
-                } else {
-                    break 'outer;
-                }
-            }
-            denoise.write().unwrap().process_frame(&mut frame_output, &mut frame_input);
-            for s in &frame_output {
-                yield *s / 32768.0;
-            }
-        }
-    }
-}
-
-fn stream_to_speaker<S: Stream<Item = Result<f32, Box<dyn Error>>> + Unpin>(
-    config: StreamConfig,
-    output_device: Device,
-    mut input: S,
-) -> impl Stream<Item = Result<f32, Box<dyn Error>>> {
-    let (tx, rx) = mpsc::channel::<f32>();
-    try_stream! {
-        let out_stream = output_device
-        .build_output_stream(
-            &config,
-            move |output: &mut [f32], _| {
-                for output_sample in output {
-                    *output_sample = rx.recv().unwrap();
-                }
-            },
-            |_| {},
-        )?;
-
-        out_stream.play()?;
-
-        while let Some(next_input) = input.next().await {
-            let inp: f32 = next_input?;
-            tx.send(inp)?;
-            yield inp;
-        }
-    }
-}
+use pcmtypes::*;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -104,16 +30,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut config: cpal::StreamConfig = supported_config.into();
     config.sample_rate = cpal::SampleRate(44_100);
 
-    let mic_stream = getstream_mic_input(config.clone(), input_device);
+    let mic_stream = mic::getstream_from_mic(config.clone(), input_device);
     pin_mut!(mic_stream);
-    let denoised_mic_stream = getstream_denoise(mic_stream);
+    let denoised_mic_stream = denoise::getstream_denoise(mic_stream);
     pin_mut!(denoised_mic_stream);
     //
     let output_device = host
         .default_output_device()
         .ok_or("No default output device available!")?;
 
-    let stream_to_speaker = stream_to_speaker(config, output_device, denoised_mic_stream);
+    let stream_to_speaker =
+        speaker::getstream_to_speaker(config, output_device, denoised_mic_stream);
     pin_mut!(stream_to_speaker);
     while let Some(i) = stream_to_speaker.next().await {
         if let Err(e) = i {
