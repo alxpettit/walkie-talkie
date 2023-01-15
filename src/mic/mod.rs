@@ -8,23 +8,22 @@ pub fn getstream_from_mic(
     input_device: cpal::Device,
 ) -> impl Stream<Item = PCMResult> {
     try_fn_stream(|emitter| async move {
-        let (tx, rx) = mpsc::channel::<f32>();
+        let (tx, rx) = mpsc::channel::<Frame>();
         //  let mut tmpframe: Frame = [0f32; 1024];
 
         let input_stream = cpal::Device::build_input_stream(
             &input_device,
             &config,
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                let (chunks, remainder) = data.as_chunks::<1024>();
+                let (chunks, remainder) = data.as_chunks::<8>();
                 for chunk in chunks {
-                    for s in chunk {
-                        tx.send(*s).unwrap();
-                        //*s
-                    }
+                    tx.send(*chunk).unwrap();
                 }
-                for s in remainder {
-                    tx.send(*s).unwrap();
+                let mut final_frame = [0f32; 8];
+                for (i, s) in remainder.iter().enumerate() {
+                    final_frame[i] = *s;
                 }
+                tx.send(final_frame).unwrap();
                 // tmpframe = data.as_chunks();
 
                 // for s in data {
@@ -39,7 +38,9 @@ pub fn getstream_from_mic(
         input_stream.play()?;
 
         for data in rx {
-            emitter.emit(data).await;
+            for s in data {
+                emitter.emit(s).await;
+            }
         }
         Ok(())
     })
