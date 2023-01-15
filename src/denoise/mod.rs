@@ -19,6 +19,7 @@ pub fn getstream_denoise<S: Stream<Item = PCMResult> + Unpin>(
 ) -> impl Stream<Item = PCMResult> {
     let denoise = std::sync::RwLock::new(DenoiseState::new());
     let mut frame_output: DenoiseChunk = DefaultDenoise::default();
+    let mut scaled: Vec<[f32; 8]> = Vec::new();
     let mut frame_input: DenoiseChunk = DefaultDenoise::default();
     try_stream! {
         'outer: loop {
@@ -30,7 +31,7 @@ pub fn getstream_denoise<S: Stream<Item = PCMResult> + Unpin>(
                 }
             }
             denoise.write().unwrap().process_frame(&mut frame_output, &mut frame_input);
-            let scaled: Vec<[f32;8]> = frame_output.chunks(8).map(|chunk| {
+            scaled = frame_output.chunks(8).map(|chunk| {
                 let scaled = f32x8::from(chunk) / 32768.0;
                 scaled.into()
             }).collect();
