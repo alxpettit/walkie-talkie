@@ -68,7 +68,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         },
         move |_err| {},
     )?;
-    input_stream.play().expect("TODO: panic message");
 
     let mut denoise_rx = denoise_stream(rx_denoise);
 
@@ -85,7 +84,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     // This had better be zero cost >.>
                     match futures::executor::block_on(denoise_rx.recv()) {
                         Ok(sample) => {
-                            println!("{}", sample);
+                            //println!("{}", sample);
                             *output_sample = sample;
                         }
                         Err(_) => {}
@@ -96,6 +95,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         )
         .expect("TODO: panic message");
 
+    input_stream.play().expect("TODO: panic message");
     out_stream.play().unwrap();
     loop {
         thread::sleep(Duration::from_secs(10000));
