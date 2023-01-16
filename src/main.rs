@@ -28,11 +28,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_max_sample_rate();
     let mut config: cpal::StreamConfig = supported_config.into();
     config.sample_rate = cpal::SampleRate(44_100);
+    let mut mic_stream_factory = mic::MicStreamFactory::default();
+    let mic = mic_stream_factory.get_stream(config.clone(), input_device);
+    pin_mut!(mic);
 
-    let mic_stream = mic::getstream_from_mic(config.clone(), input_device);
-    pin_mut!(mic_stream);
-
-    let denoised_mic_stream = denoise::getstream_denoise(mic_stream);
+    let denoised_mic_stream = denoise::getstream_denoise(mic);
     pin_mut!(denoised_mic_stream);
     //
     let output_device = host
@@ -42,6 +42,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let stream_to_speaker =
         speaker::getstream_to_speaker(config, output_device, denoised_mic_stream);
     pin_mut!(stream_to_speaker);
+    mic_stream_factory.play().unwrap();
     while let Some(i) = stream_to_speaker.next().await {
         if let Err(e) = i {
             println!("{}", e);
