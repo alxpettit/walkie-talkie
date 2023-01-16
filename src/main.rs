@@ -7,6 +7,7 @@ use std::ops::Deref;
 use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::Duration;
+use tokio::runtime::Runtime;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::{broadcast, RwLock};
@@ -22,17 +23,20 @@ impl MyDefault for [f32; DenoiseState::FRAME_SIZE] {
         [0.; DenoiseState::FRAME_SIZE]
     }
 }
+
 fn denoise_stream(mut rx: Receiver<f32>) -> Receiver<f32> {
     let denoise = RwLock::new(DenoiseState::new());
     let (out_tx, mut out_rx) = tokio::sync::broadcast::channel::<f32>(100000);
-    let handle = thread::spawn(move || loop {
+    let rt = Runtime::new().expect("Failed to create runtime");
+    thread::spawn(move || loop {
         let mut frame_output: [f32; DenoiseState::FRAME_SIZE] = MyDefault::default();
         let mut frame_input: [f32; DenoiseState::FRAME_SIZE] = MyDefault::default();
         for s in &mut frame_input {
-            *s = block_on(rx.recv()).unwrap() * 32768.0;
+            *s = rt.block_on(rx.recv()).unwrap() * 32768.0;
         }
 
-        block_on(denoise.write()).process_frame(&mut frame_output, &mut frame_input);
+        rt.block_on(denoise.write())
+            .process_frame(&mut frame_output, &mut frame_input);
         for s in &frame_output {
             out_tx.send(*s / 32768.0).unwrap();
         }
