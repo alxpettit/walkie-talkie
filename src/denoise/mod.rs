@@ -1,5 +1,6 @@
 use crate::*;
 use async_fn_stream::try_fn_stream;
+use wide::f32x8;
 
 // The chunk type & size expected by the nnnoiseless library
 pub type DenoiseChunk = [f32; DenoiseState::FRAME_SIZE];
@@ -33,8 +34,19 @@ pub fn getstream_denoise<S: Stream<Item = PCMResult> + Unpin>(
                 .write()
                 .unwrap()
                 .process_frame(&mut frame_output, &mut frame_input);
-            for s in &frame_output {
-                emitter.emit(*s / 32768.0).await;
+
+            let scaled: Vec<[f32; 8]> = frame_output
+                .chunks(8)
+                .map(|chunk| {
+                    let scaled = f32x8::from(chunk) / 32768.0;
+                    scaled.into()
+                })
+                .collect();
+
+            for chunk in scaled {
+                for s in &chunk {
+                    emitter.emit(*s).await;
+                }
             }
         }
         Ok(())
