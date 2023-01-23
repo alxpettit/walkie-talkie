@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .default_output_device()
         .ok_or("No default output device available!")?;
 
-    let stream_to_speaker =
+    let (stream_to_speaker, e) =
         speaker::getstream_to_speaker(config, output_device, denoised_mic_stream);
     pin_mut!(stream_to_speaker);
     while let Some(i) = stream_to_speaker.next().await {
