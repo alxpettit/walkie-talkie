@@ -67,7 +67,7 @@ mod tests {
         let start = Instant::now();
         let stream = getstream_from_mic(config, input_device);
         pin_mut!(stream);
-        while let Some(chunk) = block_on(stream.next()) {
+        while let Some(c) = block_on(stream.next()) {
             if start.elapsed() > Duration::from_secs(5) {
                 break;
             }
