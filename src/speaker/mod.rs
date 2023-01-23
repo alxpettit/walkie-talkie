@@ -41,52 +41,39 @@ impl From<PlayStreamError> for SpeakerError {
         SpeakerError::PlayStreamError { e }
     }
 }
-
-#[cfg(feature = "error_stream")]
-type ResultStream = (Box<dyn Stream<Item = PCMUnit>>, Receiver<SpeakerError>);
-
-#[cfg(not(feature = "error_stream"))]
-type ResultStream = Box<dyn Stream<Item = PCMUnit>>;
-
 pub fn getstream_to_speaker<S>(
     config: StreamConfig,
     output_device: Device,
     mut input: S,
-) -> ResultStream
+) -> (impl Stream<Item = PCMUnit>, Receiver<SpeakerError>)
 where
     S: Stream<Item = PCMResult> + Unpin,
 {
-    #[cfg(feature = "error_stream")]
     let (tx_err, rx_err) = mpsc::channel::<SpeakerError>();
     let (tx, rx) = mpsc::channel::<f32>();
-    let stream = Box::new(fn_stream(|emitter| async move {
-        #[cfg(feature = "error_stream")]
-        let tx_err_ptr = tx_err.clone();
-        let out_stream = output_device.build_output_stream(
-            &config,
-            move |output: &mut [f32], _| {
-                for output_sample in output {
-                    *output_sample = rx.recv().unwrap();
-                }
-            },
-            move |e| {
-                #[cfg(feature = "error_stream")]
-                tx_err_ptr.send(e.into()).unwrap();
-            },
-        );
+    (
+        fn_stream(|emitter| async move {
+            let tx_err_ptr = tx_err.clone();
+            let out_stream = output_device
+                .build_output_stream(
+                    &config,
+                    move |output: &mut [f32], _| {
+                        for output_sample in output {
+                            *output_sample = rx.recv().unwrap();
+                        }
+                    },
+                    move |e| tx_err_ptr.send(e.into()).unwrap(),
+                )
+                .unwrap();
 
-        out_stream.unwrap().play().unwrap();
+            out_stream.play().unwrap();
 
-        while let Some(next_input) = input.next().await {
-            let inp: f32 = next_input.unwrap();
-            tx.send(inp).unwrap();
-            emitter.emit(inp).await;
-        }
-    }));
-
-    #[cfg(feature = "error_stream")]
-    return (stream, rx_err);
-
-    #[cfg(not(feature = "error_stream"))]
-    stream
+            while let Some(next_input) = input.next().await {
+                let inp: f32 = next_input.unwrap();
+                tx.send(inp).unwrap();
+                emitter.emit(inp).await;
+            }
+        }),
+        rx_err,
+    )
 }
