@@ -46,48 +46,54 @@ impl From<PlayStreamError> for SpeakerError {
     }
 }
 
-pub fn getstream_to_speaker<S, E>(
+pub fn getstream_to_speaker<S>(
     config: StreamConfig,
     output_device: Device,
     mut input: S,
 ) -> (impl Stream<Item = PCMUnit>, Receiver<SpeakerError>)
 where
-    E: FnMut(SpeakerError) + Send + 'static,
-    S: Stream<Item = PCMUnit> + Unpin,
+    S: Stream<Item = PCMResult> + Unpin,
 {
-    let (tx, rx) = mpsc::channel::<f32>();
     let (tx_err, rx_err) = mpsc::channel::<SpeakerError>();
     (
         fn_stream(move |emitter| async move {
+            let (tx, rx) = mpsc::channel::<f32>();
             let tx_error_ptr = tx_err.clone();
             let out_stream = output_device.build_output_stream(
                 &config,
                 move |output: &mut [f32], _| {
                     for output_sample in output {
+                        dbg!(&output_sample);
                         *output_sample = rx.recv().unwrap();
                     }
                 },
                 move |e| tx_error_ptr.send(e.into()).unwrap(),
             );
-
-            let tx_error_ptr2 = tx_err.clone();
-            match out_stream {
-                Err(e) => {
-                    tx_error_ptr2.send(e.into()).unwrap();
-                }
-                Ok(stream) => {
-                    let play_status = stream.play();
-                    if let Err(e) = play_status {
-                        tx_error_ptr2.send(e.into()).unwrap()
-                    }
-                }
-            }
+            out_stream.unwrap().play().unwrap();
+            println!("go go go");
+            //
+            // let tx_error_ptr2 = tx_err.clone();
+            // match out_stream {
+            //     Err(e) => {
+            //         tx_error_ptr2.send(e.into()).unwrap();
+            //     }
+            //     Ok(stream) => {
+            //         let play_status = stream.play();
+            //         dbg!(&play_status);
+            //         if let Err(e) = play_status {
+            //             tx_error_ptr2.send(e.into()).unwrap()
+            //         }
+            //     }
+            // }
 
             let tx_error_ptr3 = tx_err.clone();
             while let Some(next_input) = input.next().await {
-                let inp: f32 = next_input;
-                tx.send(inp)
-                    .unwrap_or_else(|e| tx_error_ptr3.send(e.into()).unwrap());
+                let inp: f32 = next_input.unwrap();
+                tx.send(inp).unwrap_or_else(|e| {
+                    //dbg!(e);
+                    tx_error_ptr3.send(e.into()).unwrap();
+                    //dbg!(e);
+                });
                 emitter.emit(inp).await;
             }
         }),
