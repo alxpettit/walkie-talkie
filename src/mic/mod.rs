@@ -28,16 +28,6 @@ pub fn getstream_from_mic(
     })
 }
 
-fn convert_to_u8(buffer: &[f32]) -> Vec<u8> {
-    buffer
-        .iter()
-        .flat_map(|&x| {
-            let sample = (x * std::i16::MAX as f32) as i16;
-            vec![(sample >> 8) as u8, (sample & 0xff) as u8]
-        })
-        .collect()
-}
-
 mod tests {
     use super::*;
     use futures::executor::block_on;
