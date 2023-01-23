@@ -43,9 +43,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         speaker::getstream_to_speaker(config, output_device, denoised_mic_stream);
     pin_mut!(stream_to_speaker);
     while let Some(i) = stream_to_speaker.next().await {
-        if let Err(e) = i {
-            println!("{}", e);
-        }
+        // if let Err(e) = i {
+        //     println!("{}", e);
+        // }
         //println!("{}", i.unwrap());
     }
     Ok(())

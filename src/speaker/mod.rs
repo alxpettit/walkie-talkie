@@ -1,9 +1,9 @@
 use crate::*;
 
 use async_fn_stream::{fn_stream, try_fn_stream};
+use cpal::StreamError;
 use snafu::prelude::*;
 use std::sync::mpsc::SendError;
-use cpal::StreamError;
 
 #[derive(Debug, Snafu)]
 pub enum SpeakerError {
@@ -19,34 +19,33 @@ impl From<StreamError> for SpeakerError {
     }
 }
 
-
-pub fn getstream_to_speaker<S, E>(
+pub fn getstream_to_speaker<S>(
     config: StreamConfig,
     output_device: Device,
-    mut error_callback: E,
     mut input: S,
 ) -> impl Stream<Item = PCMUnit>
 where
-    E: FnMut(SpeakerError) + Send + 'static,
-    S: Stream<Item = PCMUnit> + Unpin,
+    S: Stream<Item = PCMResult> + Unpin,
 {
     let (tx, rx) = mpsc::channel::<f32>();
     fn_stream(|emitter| async move {
-        let out_stream = output_device.build_output_stream(
-            &config,
-            move |output: &mut [f32], _| {
-                for output_sample in output {
-                    *output_sample = rx.recv().unwrap();
-                }
-            },
-            move |e| error_callback(e.into()),
-        )?;
+        let out_stream = output_device
+            .build_output_stream(
+                &config,
+                move |output: &mut [f32], _| {
+                    for output_sample in output {
+                        *output_sample = rx.recv().unwrap();
+                    }
+                },
+                |_| {},
+            )
+            .unwrap();
 
-        out_stream.play()?;
+        out_stream.play().unwrap();
 
         while let Some(next_input) = input.next().await {
-            let inp: f32 = next_input;
-            tx.send(inp).or_else(|x| );
+            let inp: f32 = next_input.unwrap();
+            tx.send(inp).unwrap();
             emitter.emit(inp).await;
         }
     })
