@@ -1324,6 +1324,7 @@ dependencies = [
  "cpal",
  "futures",
  "futures-core",
+ "hound",
  "nnnoiseless",
  "snafu",
  "tokio",
