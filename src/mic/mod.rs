@@ -71,7 +71,7 @@ mod tests {
             if start.elapsed() > Duration::from_secs(5) {
                 break;
             }
-            wav_writer.write_sample(chunk.unwrap()).unwrap();
+            wav_writer.write_sample(c.unwrap()).unwrap();
         }
 
         Ok(())
