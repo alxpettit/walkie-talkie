@@ -14,3 +14,7 @@ nnnoiseless = "0.5.1"
 snafu = "0.7.4"
 tokio = { version = "1.24.1", features = ["full"] }
 wide = "0.7.5"
+
+[features]
+default = ["error-stream"]
+error-stream = []
