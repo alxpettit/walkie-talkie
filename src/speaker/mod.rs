@@ -47,7 +47,7 @@ pub fn getstream_to_speaker<S>(
     mut input: S,
 ) -> (impl Stream<Item = PCMUnit>, Receiver<SpeakerError>)
 where
-    S: Stream<Item = PCMResult> + Unpin,
+    S: Stream<Item = PCMUnit> + Unpin,
 {
     let (tx_err, rx_err) = mpsc::channel::<SpeakerError>();
     let (tx, rx) = mpsc::channel::<f32>();
@@ -69,11 +69,65 @@ where
             out_stream.play().unwrap();
 
             while let Some(next_input) = input.next().await {
-                let inp: f32 = next_input.unwrap();
-                tx.send(inp).unwrap();
-                emitter.emit(inp).await;
+                tx.send(next_input).unwrap();
+                emitter.emit(next_input).await;
             }
         }),
         rx_err,
     )
+}
+
+mod tests {
+    use super::*;
+    use futures::executor::block_on;
+    use hound::WavReader;
+    use hound::WavSpec;
+    use hound::WavWriter;
+    use std::io::Write;
+    use std::process::exit;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn speaker() -> Result<(), Box<dyn Error>> {
+        let host = cpal::default_host();
+        let output_device = host
+            .default_output_device()
+            .ok_or("No default input device available :c")?;
+        let mut supported_configs_range = output_device.supported_input_configs()?;
+        let supported_config = supported_configs_range
+            .next()
+            .ok_or("Could not get the first supported config from range")?
+            .with_max_sample_rate();
+        let mut config: cpal::StreamConfig = supported_config.into();
+        config.sample_rate = cpal::SampleRate(44_100);
+        config.channels = 2u16;
+
+        let mut wav = WavReader::open("assets/squee.wav").unwrap();
+        let input_stream = fn_stream(|emitter| async move {
+            // let (tx, rx) = mpsc::channel::<Vec<f32>>();
+            // let stream = output_device
+            //     .build_output_stream(
+            //         &config.clone(),
+            //         move |data: &mut [f32], info| {
+            //             tx.send(data.to_vec()).unwrap();
+            //         },
+            //         |_| {},
+            //     )
+            //     .unwrap();
+            //
+            // stream.play().unwrap();
+
+            for sample in wav.samples::<f32>() {
+                println!("{:#?}", sample);
+                let sample = sample.unwrap();
+                block_on(emitter.emit(sample));
+            }
+        });
+        pin_mut!(input_stream);
+        let (output_stream, e) = getstream_to_speaker(config.clone(), output_device, input_stream);
+        pin_mut!(output_stream);
+        while let Some(_) = block_on(output_stream.next()) {}
+
+        Ok(())
+    }
 }
