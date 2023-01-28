@@ -29,7 +29,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .ok_or("Could not get the first supported config from range")?
         .with_max_sample_rate();
     let mut config: cpal::StreamConfig = supported_config.into();
-    config.sample_rate = cpal::SampleRate(44_100);
+    config.sample_rate = cpal::SampleRate(88_200); // cpal::SampleRate(44_100);
 
     let mic_stream = mic::getstream_from_mic(config.clone(), input_device);
     pin_mut!(mic_stream);
