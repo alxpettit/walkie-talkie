@@ -1,30 +1,31 @@
 use crate::*;
-use async_fn_stream::try_fn_stream;
+use async_fn_stream::fn_stream;
 
 pub fn getstream_from_mic(
     config: cpal::StreamConfig,
     input_device: cpal::Device,
-) -> impl Stream<Item = PCMResult> {
-    try_fn_stream(|emitter| async move {
+) -> impl Stream<Item = PCMUnit> {
+    fn_stream(|emitter| async move {
         let (tx, rx) = mpsc::channel::<PCMVec>();
 
         let input_stream = cpal::Device::build_input_stream(
             &input_device,
             &config,
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                tx.send(data.to_vec()).unwrap();
+                tx.send(data.to_vec())
+                    .expect("Failed to send to internal MPSC");
             },
             move |_err| {},
-        )?;
+        )
+        .expect("Failed to build internal MPSC stream");
 
-        input_stream.play()?;
+        input_stream.play().expect("Failed to play");
 
         for data in rx {
             for sample in data {
                 emitter.emit(sample).await;
             }
         }
-        Ok(())
     })
 }
 
@@ -71,7 +72,7 @@ mod tests {
             if start.elapsed() > Duration::from_secs(5) {
                 break;
             }
-            wav_writer.write_sample(c.unwrap()).unwrap();
+            wav_writer.write_sample(c).unwrap();
         }
 
         Ok(())

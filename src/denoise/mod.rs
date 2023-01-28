@@ -15,7 +15,7 @@ impl DefaultDenoise for [f32; DenoiseState::FRAME_SIZE] {
     }
 }
 
-pub fn getstream_denoise<S: Stream<Item = PCMResult> + Unpin>(
+pub fn getstream_denoise<S: Stream<Item = PCMUnit> + Unpin>(
     mut input: S,
 ) -> impl Stream<Item = PCMResult> {
     let denoise = std::sync::RwLock::new(DenoiseState::new());
@@ -25,7 +25,7 @@ pub fn getstream_denoise<S: Stream<Item = PCMResult> + Unpin>(
         'outer: loop {
             for s in &mut frame_input {
                 if let Some(next) = input.next().await {
-                    *s = next? * 32768.0;
+                    *s = next * 32768.0;
                 } else {
                     break 'outer;
                 }
