@@ -17,25 +17,28 @@ pub fn real2complex(real: &Vec<f32>) -> Vec<Complex<f32>> {
     real.iter().map(|x| Complex::new(*x, 0.0)).collect()
 }
 
+pub async fn take_to_buffer<S: Stream<Item = PCMUnit> + Unpin>(mut input: S, buf: &mut Vec<f32>) {
+    // Yes, I would have liked to do take().collect(). No, it doesn't work.
+    // Borrow checker doesn't like :p
+    buf.clear();
+    'buf: for _ in 0..BUFFER {
+        match input.next().await {
+            Some(x) => buf.push(x),
+            None => {
+                break 'buf;
+            }
+        }
+    }
+}
+
 pub fn getstream_fft<S: Stream<Item = PCMUnit> + Unpin>(
     mut input: S,
 ) -> impl Stream<Item = Complex<f32>> {
     fn_stream(|emitter| async move {
-        let mut planner = FftPlanner::new();
         let mut buf: Vec<f32> = Vec::with_capacity(BUFFER);
+        let mut planner = FftPlanner::new();
         loop {
-            // Yes, I would have liked to do take().collect(). No, it doesn't work.
-            // Borrow checker doesn't like :p
-            //while let Some(x) = input.next().await {
-            'buf: for _ in 0..BUFFER {
-                match input.next().await {
-                    Some(x) => buf.push(x),
-                    None => {
-                        break 'buf;
-                    }
-                }
-            }
-
+            take_to_buffer(&mut input, &mut buf).await;
             let fft = planner.plan_fft_forward(buf.len());
             let mut complex_buf = real2complex(&buf);
             buf.clear();
@@ -47,7 +50,7 @@ pub fn getstream_fft<S: Stream<Item = PCMUnit> + Unpin>(
     })
 }
 
-pub fn complex_to_real<S: Stream<Item = Complex<f32>> + Unpin>(
+pub fn getstream_complex_to_real<S: Stream<Item = Complex<f32>> + Unpin>(
     mut input: S,
 ) -> impl Stream<Item = f32> {
     fn_stream(|emitter| async move {

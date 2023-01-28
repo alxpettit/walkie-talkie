@@ -14,7 +14,7 @@ mod mic;
 mod pcmtypes;
 mod speaker;
 
-use crate::fft::{complex_to_real, getstream_fft};
+use crate::fft::{getstream_complex_to_real, getstream_fft};
 use pcmtypes::*;
 
 #[tokio::main]
@@ -43,13 +43,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let complex = getstream_fft(denoised_mic_stream);
     pin_mut!(complex);
+    //
+    // println!("henlo");
+    // while let Some(buf) = complex.next().await {
+    //     println!("{:#?}", buf);
+    // }
 
-    println!("henlo");
-    while let Some(buf) = complex.next().await {
-        println!("{:#?}", buf);
-    }
-
-    let real = complex_to_real(complex);
+    let real = getstream_complex_to_real(complex);
     pin_mut!(real);
     let (stream_to_speaker, _) = speaker::getstream_to_speaker(config, output_device, real);
     pin_mut!(stream_to_speaker);
