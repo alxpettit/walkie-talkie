@@ -8,7 +8,7 @@ use std::iter;
 use std::iter::repeat;
 use std::sync::{Arc, Mutex};
 
-static BUFFER: usize = 2048;
+static BUFFER: usize = 256;
 
 pub fn normalize_buf(buf: &mut Vec<Complex<f32>>) {
     let buf_len = buf.len();
@@ -64,7 +64,7 @@ pub fn getstream_fft<S: Stream<Item = PCMUnit> + Unpin>(mut input: S) -> impl St
             //     .skip(1024)
             //     .chain(complex_zeros.clone().take(1024))
             //     .collect::<Vec<_>>();
-            //
+
             // complex_buf = new_complex;
             //complex_buf.
             ifft.process(&mut complex_buf);
