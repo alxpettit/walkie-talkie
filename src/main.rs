@@ -41,17 +41,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .default_output_device()
         .ok_or("No default output device available!")?;
 
-    let complex = getstream_fft(denoised_mic_stream);
-    pin_mut!(complex);
+    let fft_stream = getstream_fft(denoised_mic_stream);
+    pin_mut!(fft_stream);
     //
     // println!("henlo");
     // while let Some(buf) = complex.next().await {
     //     println!("{:#?}", buf);
     // }
 
-    let real = getstream_complex_to_real(complex);
-    pin_mut!(real);
-    let (stream_to_speaker, _) = speaker::getstream_to_speaker(config, output_device, real);
+    let (stream_to_speaker, _) = speaker::getstream_to_speaker(config, output_device, fft_stream);
     pin_mut!(stream_to_speaker);
     while let Some(i) = stream_to_speaker.next().await {
         // if let Err(e) = i {

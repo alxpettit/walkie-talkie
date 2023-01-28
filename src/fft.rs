@@ -4,7 +4,7 @@ use rustfft::num_complex::Complex;
 use rustfft::FftPlanner;
 use std::sync::{Arc, Mutex};
 
-static BUFFER: usize = 1024;
+static BUFFER: usize = 16;
 
 pub fn normalize_buf(buf: &mut Vec<Complex<f32>>) {
     let buf_len = buf.len();
@@ -17,6 +17,9 @@ pub fn real2complex(real: &Vec<f32>) -> Vec<Complex<f32>> {
     real.iter().map(|x| Complex::new(*x, 0.0)).collect()
 }
 
+pub fn complex2real(complex: &Vec<Complex<f32>>) -> Vec<f32> {
+    complex.iter().map(|x| x.re).collect()
+}
 pub async fn take_to_buffer<S: Stream<Item = PCMUnit> + Unpin>(mut input: S, buf: &mut Vec<f32>) {
     // Yes, I would have liked to do take().collect(). No, it doesn't work.
     // Borrow checker doesn't like :p
@@ -31,9 +34,7 @@ pub async fn take_to_buffer<S: Stream<Item = PCMUnit> + Unpin>(mut input: S, buf
     }
 }
 
-pub fn getstream_fft<S: Stream<Item = PCMUnit> + Unpin>(
-    mut input: S,
-) -> impl Stream<Item = Complex<f32>> {
+pub fn getstream_fft<S: Stream<Item = PCMUnit> + Unpin>(mut input: S) -> impl Stream<Item = f32> {
     fn_stream(|emitter| async move {
         let mut buf: Vec<f32> = Vec::with_capacity(BUFFER);
         let mut planner = FftPlanner::new();
@@ -43,12 +44,37 @@ pub fn getstream_fft<S: Stream<Item = PCMUnit> + Unpin>(
             let mut complex_buf = real2complex(&buf);
             buf.clear();
             fft.process(&mut complex_buf);
-            for item in complex_buf {
-                emitter.emit(item).await;
+
+            let ifft = planner.plan_fft_inverse(buf.len());
+            ifft.process(&mut complex_buf);
+            normalize_buf(&mut complex_buf);
+            for r in complex2real(&complex_buf) {
+                emitter.emit(r).await;
             }
         }
     })
 }
+
+//
+//
+// pub fn getstream_fft<S: Stream<Item = PCMUnit> + Unpin>(
+//     mut input: S,
+// ) -> impl Stream<Item = Complex<f32>> {
+//     fn_stream(|emitter| async move {
+//         let mut buf: Vec<f32> = Vec::with_capacity(BUFFER);
+//         let mut planner = FftPlanner::new();
+//         loop {
+//             take_to_buffer(&mut input, &mut buf).await;
+//             let fft = planner.plan_fft_forward(buf.len());
+//             let mut complex_buf = real2complex(&buf);
+//             buf.clear();
+//             fft.process(&mut complex_buf);
+//             for item in complex_buf {
+//                 emitter.emit(item).await;
+//             }
+//         }
+//     })
+// }
 
 pub fn getstream_complex_to_real<S: Stream<Item = Complex<f32>> + Unpin>(
     mut input: S,
@@ -59,6 +85,14 @@ pub fn getstream_complex_to_real<S: Stream<Item = Complex<f32>> + Unpin>(
         }
     })
 }
+//
+// pub fn getstream_normalize_complex<S: Stream<Item = Complex<f32>>>(
+//     mut input: S,
+// ) -> impl Stream<Item = Complex<f32>> {
+//     fn_stream(|emitter| async move {
+//         emitter.emit(todo!()).await;
+//     })
+// }
 
 // mod tests {
 //     use super::*;
