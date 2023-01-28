@@ -1,11 +1,14 @@
 use crate::*;
 use async_fn_stream::fn_stream;
-use itertools::Itertools;
+use itertools::{repeat_n, Itertools};
 use rustfft::num_complex::Complex;
+use rustfft::num_traits::Zero;
 use rustfft::FftPlanner;
+use std::iter;
+use std::iter::repeat;
 use std::sync::{Arc, Mutex};
 
-static BUFFER: usize = 512;
+static BUFFER: usize = 2048;
 
 pub fn normalize_buf(buf: &mut Vec<Complex<f32>>) {
     let buf_len = buf.len();
@@ -41,6 +44,7 @@ pub fn getstream_fft<S: Stream<Item = PCMUnit> + Unpin>(mut input: S) -> impl St
         let mut planner = FftPlanner::new();
         let fft = planner.plan_fft_forward(buf.len());
         let ifft = planner.plan_fft_inverse(buf.len());
+        let complex_zeros = repeat(Complex::<f32>::zero()).into_iter();
         loop {
             take_to_buffer(&mut input, &mut buf).await;
             let mut complex_buf = real2complex(&buf);
@@ -48,11 +52,21 @@ pub fn getstream_fft<S: Stream<Item = PCMUnit> + Unpin>(mut input: S) -> impl St
             fft.process(&mut complex_buf);
             // do something wacky here
             //let a = &complex_buf.iter().map(|x| x.re.to_string()).join(" ");
-            complex_buf.reverse();
+            //complex_buf.reverse();
             // let (buf_a, mut buf_b) = complex_buf.split_at(BUFFER / 2);
             // let mut b = buf_b.to_vec();
             // b.append(&mut buf_a.to_vec());
             //complex_buf = b;
+            //complex_buf.splitn(3);
+
+            // let new_complex = complex_buf
+            //     .into_iter()
+            //     .skip(1024)
+            //     .chain(complex_zeros.clone().take(1024))
+            //     .collect::<Vec<_>>();
+            //
+            // complex_buf = new_complex;
+            //complex_buf.
             ifft.process(&mut complex_buf);
             normalize_buf(&mut complex_buf);
             for r in complex2real(&complex_buf) {
