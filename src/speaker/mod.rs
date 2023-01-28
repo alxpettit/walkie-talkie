@@ -47,7 +47,7 @@ pub fn getstream_to_speaker<S>(
     mut input: S,
 ) -> (impl Stream<Item = PCMUnit>, Receiver<SpeakerError>)
 where
-    S: Stream<Item = PCMResult> + Unpin,
+    S: Stream<Item = PCMUnit> + Unpin,
 {
     let (tx_err, rx_err) = mpsc::channel::<SpeakerError>();
     let (tx, rx) = mpsc::channel::<f32>();
@@ -69,9 +69,8 @@ where
             out_stream.play().unwrap();
 
             while let Some(next_input) = input.next().await {
-                let inp: f32 = next_input.unwrap();
-                tx.send(inp).unwrap();
-                emitter.emit(inp).await;
+                tx.send(next_input).unwrap();
+                emitter.emit(next_input).await;
             }
         }),
         rx_err,

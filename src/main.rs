@@ -9,11 +9,12 @@ use std::error::Error;
 use std::sync::mpsc;
 
 mod denoise;
-//mod fft;
+mod fft;
 mod mic;
 mod pcmtypes;
 mod speaker;
 
+use crate::fft::{complex_to_real, getstream_fft};
 use pcmtypes::*;
 
 #[tokio::main]
@@ -35,13 +36,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let denoised_mic_stream = denoise::getstream_denoise(mic_stream);
     pin_mut!(denoised_mic_stream);
-    //
+
     let output_device = host
         .default_output_device()
         .ok_or("No default output device available!")?;
 
-    let (stream_to_speaker, e) =
-        speaker::getstream_to_speaker(config, output_device, denoised_mic_stream);
+    let complex = getstream_fft(denoised_mic_stream);
+    pin_mut!(complex);
+
+    println!("henlo");
+    while let Some(buf) = complex.next().await {
+        println!("{:#?}", buf);
+    }
+
+    let real = complex_to_real(complex);
+    pin_mut!(real);
+    let (stream_to_speaker, _) = speaker::getstream_to_speaker(config, output_device, real);
     pin_mut!(stream_to_speaker);
     while let Some(i) = stream_to_speaker.next().await {
         // if let Err(e) = i {

@@ -1,5 +1,5 @@
 use crate::*;
-use async_fn_stream::try_fn_stream;
+use async_fn_stream::{fn_stream, try_fn_stream};
 use wide::f32x8;
 
 // The chunk type & size expected by the nnnoiseless library
@@ -17,11 +17,11 @@ impl DefaultDenoise for [f32; DenoiseState::FRAME_SIZE] {
 
 pub fn getstream_denoise<S: Stream<Item = PCMUnit> + Unpin>(
     mut input: S,
-) -> impl Stream<Item = PCMResult> {
+) -> impl Stream<Item = PCMUnit> {
     let denoise = std::sync::RwLock::new(DenoiseState::new());
     let mut frame_output: DenoiseChunk = DefaultDenoise::default();
     let mut frame_input: DenoiseChunk = DefaultDenoise::default();
-    try_fn_stream(|emitter| async move {
+    fn_stream(|emitter| async move {
         'outer: loop {
             for s in &mut frame_input {
                 if let Some(next) = input.next().await {
@@ -49,6 +49,5 @@ pub fn getstream_denoise<S: Stream<Item = PCMUnit> + Unpin>(
                 }
             }
         }
-        Ok(())
     })
 }

@@ -1,40 +1,59 @@
 use crate::*;
-use async_fn_stream::try_fn_stream;
+use async_fn_stream::fn_stream;
+use rustfft::num_complex::Complex;
+use rustfft::FftPlanner;
+use std::sync::{Arc, Mutex};
 
 static BUFFER: usize = 1024;
 
+pub fn normalize_buf(buf: &mut Vec<Complex<f32>>) {
+    let buf_len = buf.len();
+    for x in &mut buf.iter_mut() {
+        *x = *x / (buf_len as f32);
+    }
+}
+
+pub fn real2complex(real: &Vec<f32>) -> Vec<Complex<f32>> {
+    real.iter().map(|x| Complex::new(*x, 0.0)).collect()
+}
+
 pub fn getstream_fft<S: Stream<Item = PCMUnit> + Unpin>(
     mut input: S,
-) -> impl Stream<Item = PCMUnit> {
-    try_fn_stream(|emitter| async move {
+) -> impl Stream<Item = Complex<f32>> {
+    fn_stream(|emitter| async move {
+        let mut planner = FftPlanner::new();
+        let mut buf: Vec<f32> = Vec::with_capacity(BUFFER);
         loop {
-            let buf = input.filter_map(|x| match x {
-                Ok(x) => Some(x),
-                Err(_) => None,
-            });
-            //.collect::<Vec<_>>();
-        }
-        // let (tx, rx) = mpsc::channel::<PCMVec>();
-        //
-        // let input_stream = cpal::Device::build_input_stream(
-        //     &input_device,
-        //     &config,
-        //     move |data: &[f32], _: &cpal::InputCallbackInfo| {
-        //         tx.send(data.to_vec()).unwrap();
-        //     },
-        //     move |_err| {},
-        // )?;
-        //
-        // input_stream.play()?;
-        //
-        // for data in rx {
-        //     for sample in data {
-        //         emitter.emit(sample).await;
-        //     }
-        // }
-        // Ok(())
+            // Yes, I would have liked to do take().collect(). No, it doesn't work.
+            // Borrow checker doesn't like :p
+            //while let Some(x) = input.next().await {
+            'buf: for _ in 0..BUFFER {
+                match input.next().await {
+                    Some(x) => buf.push(x),
+                    None => {
+                        break 'buf;
+                    }
+                }
+            }
 
-        emitter.emit(todo!()).await;
+            let fft = planner.plan_fft_forward(buf.len());
+            let mut complex_buf = real2complex(&buf);
+            buf.clear();
+            fft.process(&mut complex_buf);
+            for item in complex_buf {
+                emitter.emit(item).await;
+            }
+        }
+    })
+}
+
+pub fn complex_to_real<S: Stream<Item = Complex<f32>> + Unpin>(
+    mut input: S,
+) -> impl Stream<Item = f32> {
+    fn_stream(|emitter| async move {
+        while let Some(x) = input.next().await {
+            emitter.emit(x.re).await;
+        }
     })
 }
 
