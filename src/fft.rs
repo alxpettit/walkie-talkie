@@ -4,7 +4,7 @@ use rustfft::num_complex::Complex;
 use rustfft::FftPlanner;
 use std::sync::{Arc, Mutex};
 
-static BUFFER: usize = 16;
+static BUFFER: usize = 256;
 
 pub fn normalize_buf(buf: &mut Vec<Complex<f32>>) {
     let buf_len = buf.len();
@@ -38,14 +38,14 @@ pub fn getstream_fft<S: Stream<Item = PCMUnit> + Unpin>(mut input: S) -> impl St
     fn_stream(|emitter| async move {
         let mut buf: Vec<f32> = Vec::with_capacity(BUFFER);
         let mut planner = FftPlanner::new();
+        let fft = planner.plan_fft_forward(buf.len());
+        let ifft = planner.plan_fft_inverse(buf.len());
         loop {
             take_to_buffer(&mut input, &mut buf).await;
-            let fft = planner.plan_fft_forward(buf.len());
             let mut complex_buf = real2complex(&buf);
             buf.clear();
             fft.process(&mut complex_buf);
-
-            let ifft = planner.plan_fft_inverse(buf.len());
+            // do something wacky here
             ifft.process(&mut complex_buf);
             normalize_buf(&mut complex_buf);
             for r in complex2real(&complex_buf) {
