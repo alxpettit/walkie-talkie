@@ -64,12 +64,15 @@ where
                     },
                     move |e| tx_err_ptr.send(e.into()).unwrap(),
                 )
-                .unwrap();
+                .expect("Failed to build internal output stream.");
 
-            out_stream.play().unwrap();
+            out_stream
+                .play()
+                .expect("Failed to play internal output stream.");
 
             while let Some(next_input) = input.next().await {
-                tx.send(next_input).unwrap();
+                tx.send(next_input)
+                    .expect("Failed to send on internal MPSC.");
                 emitter.emit(next_input).await;
             }
         }),
