@@ -9,6 +9,7 @@ use std::error::Error;
 use std::sync::mpsc;
 
 mod denoise;
+//mod fft;
 mod mic;
 mod pcmtypes;
 mod speaker;
