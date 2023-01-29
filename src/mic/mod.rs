@@ -33,9 +33,12 @@ pub fn getstream_from_mic(
 
 mod tests {
     use super::*;
+    use cpal::traits::HostTrait;
     use futures::executor::block_on;
+    use futures::pin_mut;
     use hound::WavSpec;
     use hound::WavWriter;
+    use std::error::Error;
     use std::io::Write;
     use std::time::{Duration, Instant};
 
