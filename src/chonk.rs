@@ -7,7 +7,7 @@ use itertools::Itertools;
 
 // Remember: the perfect is the enemy of the good
 #[derive(Debug)]
-struct Chonk<T> {
+pub struct Chonk<T> {
     data: Vec<T>,
     max_size: usize,
 }
@@ -44,30 +44,30 @@ where
 
 impl<T> Chonk<T> {
     /// Get a new self. Takes a usize for constraining the maximum size of the chonk.
-    fn new(max_size: usize) -> Self {
+    pub fn new(max_size: usize) -> Self {
         let data = Vec::with_capacity(max_size);
         Self { data, max_size }
     }
 
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.data.len()
     }
 
     /// Like set_max_size, but immediately curtails size to enforce the new maximum siz.
-    fn do_max_size(&mut self, max_size: usize) -> Option<Vec<T>> {
+    pub fn do_max_size(&mut self, max_size: usize) -> Option<Vec<T>> {
         self.max_size = max_size;
         self.curtail()
     }
 
     /// Sets maximum size
-    fn set_max_size(&mut self, max_size: usize) {
+    pub fn set_max_size(&mut self, max_size: usize) {
         self.max_size = max_size;
     }
 
     /// To slurp a Vec, is to consume the elements inside them and append them to yourself
     /// but if you consume too much (exceeding `max_size`), you may find yourself secreting the excess
     /// If it fits nicely, you return `None`, otherwise you return `Some<Vec<T>>`.
-    fn slurp(&mut self, other: &mut Vec<T>) -> Option<Vec<T>> {
+    pub fn slurp(&mut self, other: &mut Vec<T>) -> Option<Vec<T>> {
         self.data.append(other);
         self.curtail()
     }
@@ -78,7 +78,7 @@ impl<T> Chonk<T> {
     /// Unlike `slurp`, `ploop` is a more radical and daring option, and a sign of a true fearless warrior.
     /// It is an act of radical self-mastery, a recreation of one's self with new foundations.
     /// It can only be done by one who has achieved true self ownership, as a mere reference is insufficient.
-    fn ploop(mut self, other: Vec<T>) -> (Self, Option<Vec<T>>) {
+    pub fn ploop(mut self, other: Vec<T>) -> (Self, Option<Vec<T>>) {
         let mut old_data = self.data;
         self.data = other;
         let curtailed = self.slurp(&mut old_data);
@@ -87,7 +87,7 @@ impl<T> Chonk<T> {
     }
 
     /// Splits the end off according to the maximum size of the chonk
-    fn curtail(&mut self) -> Option<Vec<T>> {
+    pub fn curtail(&mut self) -> Option<Vec<T>> {
         if self.data.len() > self.max_size {
             Some(self.data.split_off(self.max_size))
         } else {
@@ -97,7 +97,7 @@ impl<T> Chonk<T> {
 
     /// Eat a vector, returning self with the internal data being made from that vector,
     /// and with `max_size` set according to the second argument.
-    fn from_with_max_size(v: Vec<T>, max_size: usize) -> Self {
+    pub fn from_with_max_size(v: Vec<T>, max_size: usize) -> Self {
         Self { data: v, max_size }
     }
 
@@ -120,6 +120,12 @@ impl<T> Chonk<T> {
     pub fn nom_iter<I: Iterator<Item = T>>(&mut self, input: I) {
         let mut taken = input.take(self.max_size - self.data.len()).collect_vec();
         self.data.append(&mut taken);
+    }
+
+    pub fn for_each_mut<F: Fn(&mut T)>(&mut self, f: F) {
+        for x in self.data.iter_mut() {
+            f(x);
+        }
     }
 }
 
