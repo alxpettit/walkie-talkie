@@ -4,7 +4,7 @@ use futures::Stream;
 use futures::StreamExt;
 
 #[deprecated]
-pub async fn getstream_vol_up(
+pub async fn getstream_vol_scale(
     mult: f32,
     mut input: impl Stream<Item = f32> + Unpin,
 ) -> impl Stream<Item = f32> {
@@ -15,7 +15,7 @@ pub async fn getstream_vol_up(
     })
 }
 
-pub async fn getstream_vol_up_chonk(
+pub async fn getstream_vol_scale_chonk(
     mult: f32,
     mut input: impl Stream<Item = Chonk<f32>> + Unpin,
 ) -> impl Stream<Item = Chonk<f32>> {

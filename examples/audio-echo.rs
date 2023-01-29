@@ -8,7 +8,7 @@ use audio_stream::denoise::getstream_denoise;
 use audio_stream::fft::getstream_fft;
 use audio_stream::mic::getstream_from_mic;
 use audio_stream::speaker::getstream_to_speaker;
-use audio_stream::vol_up::getstream_vol_up;
+use audio_stream::vol_up::getstream_vol_scale;
 
 async fn audio_thread() -> Result<(), Box<dyn Error>> {
     let host = cpal::default_host();
@@ -30,13 +30,13 @@ async fn audio_thread() -> Result<(), Box<dyn Error>> {
     let mic_stream = getstream_from_mic(config.clone(), input_device);
     pin_mut!(mic_stream);
 
-    let mic_stream = getstream_vol_up(40., mic_stream).await;
+    let mic_stream = getstream_vol_scale(40., mic_stream).await;
     pin_mut!(mic_stream);
 
     let mic_stream = getstream_denoise(mic_stream);
     pin_mut!(mic_stream);
 
-    let mic_stream = getstream_vol_up(2., mic_stream).await;
+    let mic_stream = getstream_vol_scale(2., mic_stream).await;
     pin_mut!(mic_stream);
 
     let mic_stream = getstream_fft(mic_stream);
