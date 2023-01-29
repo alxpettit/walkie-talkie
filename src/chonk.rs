@@ -66,10 +66,10 @@ impl<T> Chonk<T> {
         self.curtail()
     }
 
-    /// To ploop a Vec, is to consume the elements inside it and prepend it to yourself
+    /// To `ploop` a Vec, is to consume the elements inside it and prepend it to yourself
     /// but if you consume too much (exceeding max_size), you may find yourself secreting the excess
-    /// If it fits nicely, you return None, otherwise you return Some<Vec<SomeCrap>>.
-    /// Unlike slurp, ploop is a more radical and daring option, and a sign of a true fearless warrior.
+    /// If it fits nicely, you return None, otherwise you return `Some<Vec<T>>`.
+    /// Unlike `slurp`, `ploop` is a more radical and daring option, and a sign of a true fearless warrior.
     /// It is an act of radical self-mastery, a recreation of one's self with new foundations.
     /// It can only be done by one who has achieved true self ownership, as a mere reference is insufficient.
     fn ploop(mut self, other: Vec<T>) -> (Self, Option<Vec<T>>) {
