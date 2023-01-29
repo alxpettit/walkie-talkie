@@ -59,8 +59,8 @@ impl<T> Chonk<T> {
     }
 
     /// To slurp a Vec, is to consume the elements inside them and append them to yourself
-    /// but if you consume too much (exceeding max_size), you may find yourself secreting the excess
-    /// If it fits nicely, you return None, otherwise you return Some<Vec<SomeCrap>>.
+    /// but if you consume too much (exceeding `max_size`), you may find yourself secreting the excess
+    /// If it fits nicely, you return `None`, otherwise you return `Some<Vec<T>>`.
     fn slurp(&mut self, other: &mut Vec<T>) -> Option<Vec<T>> {
         self.data.append(other);
         self.curtail()
@@ -90,7 +90,7 @@ impl<T> Chonk<T> {
     }
 
     /// Eat a vector, returning self with the internal data being made from that vector,
-    /// and with max_size set according to the second argument.
+    /// and with `max_size` set according to the second argument.
     fn from_with_max_size(v: Vec<T>, max_size: usize) -> Self {
         Self { data: v, max_size }
     }
@@ -100,7 +100,6 @@ impl<T> IntoIterator for Chonk<T> {
     type Item = T;
     type IntoIter = std::vec::IntoIter<T>;
 
-    ///
     fn into_iter(self) -> Self::IntoIter {
         self.data.into_iter()
     }
