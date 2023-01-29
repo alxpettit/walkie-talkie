@@ -10,14 +10,52 @@ struct Chonk<T> {
     max_size: usize,
 }
 
+impl<T> PartialEq<Self> for Chonk<T>
+where
+    T: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.data == other.data
+    }
+}
+
+impl<T> PartialEq<Vec<T>> for Chonk<T>
+where
+    T: PartialEq,
+{
+    fn eq(&self, other: &Vec<T>) -> bool {
+        self.data == *other
+    }
+}
+
+impl<T> PartialEq<Option<Vec<T>>> for Chonk<T>
+where
+    T: PartialEq,
+{
+    fn eq(&self, other: &Option<Vec<T>>) -> bool {
+        match other {
+            None => false,
+            Some(data) => self.data == *data,
+        }
+    }
+}
+
 impl<T> Chonk<T> {
+    /// Get a new self. Takes a usize for constraining the maximum size of the chonk.
     fn new(max_size: usize) -> Self {
         let data = Vec::with_capacity(max_size);
         Self { data, max_size }
     }
 
-    fn set_max_size(&mut self, max_size: &usize) {
-        self.max_size = *max_size;
+    /// Like set_max_size, but immediately curtails size to enforce the new maximum siz.
+    fn do_max_size(&mut self, max_size: usize) -> Option<Vec<T>> {
+        self.max_size = max_size;
+        self.curtail()
+    }
+
+    /// Sets maximum size
+    fn set_max_size(&mut self, max_size: usize) {
+        self.max_size = max_size;
     }
 
     /// To slurp a Vec, is to consume the elements inside them and append them to yourself
@@ -42,6 +80,7 @@ impl<T> Chonk<T> {
         (self, curtailed)
     }
 
+    /// Splits the end off according to the maximum size of the chonk
     fn curtail(&mut self) -> Option<Vec<T>> {
         if self.data.len() > self.max_size {
             Some(self.data.split_off(self.max_size))
@@ -50,7 +89,9 @@ impl<T> Chonk<T> {
         }
     }
 
-    fn from_with_capacity(v: Vec<T>, max_size: usize) -> Self {
+    /// Eat a vector, returning self with the internal data being made from that vector,
+    /// and with max_size set according to the second argument.
+    fn from_with_max_size(v: Vec<T>, max_size: usize) -> Self {
         Self { data: v, max_size }
     }
 }
@@ -59,6 +100,7 @@ impl<T> IntoIterator for Chonk<T> {
     type Item = T;
     type IntoIter = std::vec::IntoIter<T>;
 
+    ///
     fn into_iter(self) -> Self::IntoIter {
         self.data.into_iter()
     }
@@ -81,9 +123,15 @@ mod tests {
     #[test]
     fn basic_chonk() {
         let mut chonk = Chonk::<i32>::new(6);
-        let slurp = chonk.slurp(&mut vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+        let slurp_excess = chonk.slurp(&mut vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+        dbg!(&slurp_excess);
+        dbg!(&chonk);
+        chonk.set_max_size(10);
+        let (chonk, ploop_excess) = chonk.ploop(vec![0, 10, 20, 30, 40, 50]);
+        dbg!(&chonk);
+        dbg!(&ploop_excess);
 
-        dbg!(slurp);
-        dbg!(chonk);
+        assert_eq!(chonk, Some(vec![0, 10, 20, 30, 40, 50, 0, 1, 2, 3]));
+        assert_eq!(ploop_excess, Some(vec![4, 5]));
     }
 }
