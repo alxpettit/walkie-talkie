@@ -1,6 +1,8 @@
 // TODO: figure out an ADT for Chonk that will let us store
 // Need to store both sides of
 
+use crate::StreamExt;
+use futures_core::Stream;
 use itertools::Itertools;
 
 // Remember: the perfect is the enemy of the good
@@ -93,6 +95,23 @@ impl<T> Chonk<T> {
     /// and with `max_size` set according to the second argument.
     fn from_with_max_size(v: Vec<T>, max_size: usize) -> Self {
         Self { data: v, max_size }
+    }
+
+    /// Unlike `slurp`, and `ploop`, `nom` is a precision operation. `nom` never takes more than needed.
+    pub async fn nom_stream<S: Stream<Item = T> + Unpin>(&mut self, mut input: S) {
+        self.data.clear();
+        'buf: for _ in 0..self.max_size {
+            match input.next().await {
+                Some(x) => self.data.push(x),
+                None => {
+                    break 'buf;
+                }
+            }
+        }
+    }
+
+    pub async fn nom_iter<I: Iterator<Item = T>>(&mut self, input: I) {
+        self.data = input.take(self.max_size).collect_vec();
     }
 }
 
