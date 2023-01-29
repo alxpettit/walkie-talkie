@@ -1,0 +1,3 @@
+[submodule "chonk-chunking"]
+	path = chonk-chunking
+	url = https://github.com/alxpettit/chonk-chunking
