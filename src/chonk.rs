@@ -4,11 +4,12 @@
 use crate::StreamExt;
 use futures_core::Stream;
 use itertools::{repeat_n, Itertools};
+use std::collections::VecDeque;
 
 // Remember: the perfect is the enemy of the good
 #[derive(Debug)]
 pub struct Chonk<T> {
-    data: Vec<T>,
+    data: VecDeque<T>,
     max_size: usize,
 }
 
@@ -21,11 +22,11 @@ where
     }
 }
 
-impl<T> PartialEq<Vec<T>> for Chonk<T>
+impl<T> PartialEq<VecDeque<T>> for Chonk<T>
 where
     T: PartialEq,
 {
-    fn eq(&self, other: &Vec<T>) -> bool {
+    fn eq(&self, other: &VecDeque<T>) -> bool {
         self.data == *other
     }
 }
@@ -35,17 +36,28 @@ where
     T: PartialEq,
 {
     fn eq(&self, other: &ChonkRemainder<T>) -> bool {
-        Some(&self.data) == other.data.as_ref()
+        self.data == other.data.unwrap_or_default()
     }
 }
 
-#[derive(Debug, Default)]
+// }
+//
+// impl<T> PartialEq<ChonkRemainder<T>> for Chonk<T>
+// where
+//     T: PartialEq,
+// {
+//     fn eq(&self, other: &ChonkRemainder<T>) -> bool {
+//         Some(&self.data) == other.data.as_ref()
+//     }
+// }
+
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct ChonkRemainder<T> {
-    data: Option<Vec<T>>,
+    data: Option<VecDeque<T>>,
 }
 
 impl<T> ChonkRemainder<T> {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self { data: None }
     }
 
@@ -57,31 +69,31 @@ impl<T> ChonkRemainder<T> {
         return self.data.is_some();
     }
 
-    fn clone_vec_from(mut self) -> Vec<T> {
+    fn extract_vecdeque(mut self) -> VecDeque<T> {
         match self.data {
             Some(data) => data,
-            None => Vec::<T>::new(),
+            None => VecDeque::<T>::new(),
         }
     }
 }
 
-impl<T> From<Option<Vec<T>>> for ChonkRemainder<T> {
-    fn from(value: Option<Vec<T>>) -> Self {
+impl<T> From<Option<VecDeque<T>>> for ChonkRemainder<T> {
+    fn from(value: Option<VecDeque<T>>) -> Self {
         Self { data: value }
     }
 }
 
-impl<T> From<Vec<T>> for ChonkRemainder<T> {
-    fn from(value: Vec<T>) -> Self {
+impl<T> From<VecDeque<T>> for ChonkRemainder<T> {
+    fn from(value: VecDeque<T>) -> Self {
         Self { data: Some(value) }
     }
 }
 
-impl<T> From<ChonkRemainder<T>> for Vec<T> {
+impl<T> From<ChonkRemainder<T>> for VecDeque<T> {
     fn from(value: ChonkRemainder<T>) -> Self {
         match value.data {
             Some(data) => data,
-            None => Vec::<T>::new(),
+            None => VecDeque::<T>::new(),
         }
     }
 }
@@ -89,7 +101,7 @@ impl<T> From<ChonkRemainder<T>> for Vec<T> {
 impl<T> Chonk<T> {
     /// Get a new self. Takes a usize for constraining the maximum size of the chonk.
     pub fn new(max_size: usize) -> Self {
-        let data = Vec::with_capacity(max_size);
+        let data = VecDeque::with_capacity(max_size);
         Self { data, max_size }
     }
 
@@ -98,7 +110,7 @@ impl<T> Chonk<T> {
     }
 
     /// Like set_max_size, but immediately curtails size to enforce the new maximum siz.
-    pub fn do_max_size(&mut self, max_size: usize) -> Option<Vec<T>> {
+    pub fn do_max_size(&mut self, max_size: usize) -> ChonkRemainder<T> {
         self.max_size = max_size;
         self.curtail()
     }
@@ -113,7 +125,7 @@ impl<T> Chonk<T> {
         T: Clone,
     {
         Self {
-            data: repeat_n(element, n).collect_vec(),
+            data: repeat_n(element, n).collect::<VecDeque<_>>(),
             max_size: n,
         }
     }
@@ -121,37 +133,44 @@ impl<T> Chonk<T> {
     /// To slurp a Vec, is to consume the elements inside them and append them to yourself
     /// but if you consume too much (exceeding `max_size`), you may find yourself secreting the excess
     /// If it fits nicely, you return `None`, otherwise you return `Some<Vec<T>>`.
-    pub fn slurp(&mut self, other: &mut Vec<T>) -> Option<Vec<T>> {
+    pub fn slurp(&mut self, other: &mut VecDeque<T>) -> ChonkRemainder<T> {
         self.data.append(other);
         self.curtail()
     }
 
-    /// To `ploop` a Vec, is to consume the elements inside it and prepend it to yourself
-    /// but if you consume too much (exceeding max_size), you may find yourself secreting the excess
-    /// If it fits nicely, you return None, otherwise you return `Some<Vec<T>>`.
+    /// To `ploop` a `ChonkRemainder`, is to consume the elements inside it and prepend it to yourself
+    /// but if you consume too much (exceeding `max_size`), you may find yourself secreting
+    /// the excess into your return `ChonkRemainder`.
     /// Unlike `slurp`, `ploop` is a more radical and daring option, and a sign of a true fearless warrior.
     /// It is an act of radical self-mastery, a recreation of one's self with new foundations.
     /// It can only be done by one who has achieved true self ownership, as a mere reference is insufficient.
-    pub fn ploop(mut self, other: Vec<T>) -> (Self, Option<Vec<T>>) {
+    pub fn ploop(mut self, other: ChonkRemainder<T>) -> (Self, ChonkRemainder<T>) {
         let mut old_data = self.data;
-        self.data = other;
+        self.data = other.data.unwrap_or_default();
         let curtailed = self.slurp(&mut old_data);
 
         (self, curtailed)
     }
 
+    pub fn pop_front_into(mut self, arr: &mut [T]) -> Result<(), ()> {
+        for p in arr {
+            self.data.pop_back();
+        }
+        todo!()
+    }
+
     /// Splits the end off according to the maximum size of the chonk
-    pub fn curtail(&mut self) -> Option<Vec<T>> {
+    pub fn curtail(&mut self) -> ChonkRemainder<T> {
         if self.data.len() > self.max_size {
-            Some(self.data.split_off(self.max_size))
+            ChonkRemainder::<T>::from(self.data.split_off(self.max_size))
         } else {
-            None
+            ChonkRemainder::<T>::from(None)
         }
     }
 
     /// Eat a vector, returning self with the internal data being made from that vector,
     /// and with `max_size` set according to the second argument.
-    pub fn from_with_max_size(v: Vec<T>, max_size: usize) -> Self {
+    pub fn from_with_max_size(v: VecDeque<T>, max_size: usize) -> Self {
         Self { data: v, max_size }
     }
 
@@ -159,7 +178,7 @@ impl<T> Chonk<T> {
         let take = self.data.len()..self.max_size;
         'buf: for _ in take {
             match input.next().await {
-                Some(x) => self.data.push(x),
+                Some(x) => self.data.push_back(x),
                 None => {
                     break 'buf;
                 }
@@ -171,7 +190,9 @@ impl<T> Chonk<T> {
     /// I _think_ this should work on async Stream too, but I'm not sure.
     /// If not, I'll make a method for that.
     pub fn nom_iter<I: Iterator<Item = T>>(&mut self, input: I) {
-        let mut taken = input.take(self.max_size - self.data.len()).collect_vec();
+        let mut taken = input
+            .take(self.max_size - self.data.len())
+            .collect::<VecDeque<_>>();
         self.data.append(&mut taken);
     }
 
@@ -185,15 +206,15 @@ impl<T> Chonk<T> {
 
 impl<T> IntoIterator for Chonk<T> {
     type Item = T;
-    type IntoIter = std::vec::IntoIter<T>;
+    type IntoIter = std::collections::vec_deque::IntoIter<T>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.data.into_iter()
     }
 }
 
-impl<T> From<Vec<T>> for Chonk<T> {
-    fn from(value: Vec<T>) -> Self {
+impl<T> From<VecDeque<T>> for Chonk<T> {
+    fn from(value: VecDeque<T>) -> Self {
         let value_len = value.len();
         Self {
             data: value,
@@ -209,16 +230,26 @@ mod tests {
     #[test]
     fn basic_chonk() {
         let mut chonk = Chonk::<i32>::new(6);
-        let slurp_excess = chonk.slurp(&mut vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+        let slurp_excess = chonk.slurp(&mut VecDeque::from(vec![
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+        ]));
         dbg!(&slurp_excess);
         dbg!(&chonk);
         chonk.set_max_size(10);
-        let (mut chonk, ploop_excess) = chonk.ploop(vec![0, 10, 20, 30, 40, 50]);
+        let (mut chonk, ploop_excess) = chonk.ploop(ChonkRemainder::from(VecDeque::from(vec![
+            0, 10, 20, 30, 40, 50,
+        ])));
         dbg!(&chonk);
         dbg!(&ploop_excess);
 
-        assert_eq!(chonk, Some(vec![0, 10, 20, 30, 40, 50, 0, 1, 2, 3]));
-        assert_eq!(ploop_excess, Some(vec![4, 5]));
+        assert_eq!(
+            chonk,
+            ChonkRemainder::from(VecDeque::from(vec![0, 10, 20, 30, 40, 50, 0, 1, 2, 3]))
+        );
+        assert_eq!(
+            ploop_excess,
+            ChonkRemainder::from(VecDeque::from(vec![4, 5]))
+        );
 
         chonk.set_max_size(32);
         let iter = std::iter::repeat(100);
