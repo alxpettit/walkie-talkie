@@ -42,6 +42,17 @@ where
     }
 }
 
+#[derive(Debug, Default)]
+pub struct ChonkRemainder<T> {
+    data: Option<Vec<T>>,
+}
+
+impl<T> ChonkRemainder<T> {
+    fn new() -> Self {
+        Self { data: None }
+    }
+}
+
 impl<T> Chonk<T> {
     /// Get a new self. Takes a usize for constraining the maximum size of the chonk.
     pub fn new(max_size: usize) -> Self {
@@ -111,18 +122,17 @@ impl<T> Chonk<T> {
         Self { data: v, max_size }
     }
 
-    // pub async fn newish_nom_stream<S: Stream<Item = T> + Unpin>(&mut self, mut input: S) {
-    //     self.data.clear();
-    //     input.take(self.max_size);
-    //     'buf: for _ in 0..self.max_size {
-    //         match input.next().await {
-    //             Some(x) => self.data.push(x),
-    //             None => {
-    //                 break 'buf;
-    //             }
-    //         }
-    //     }
-    // }
+    pub async fn nom_stream_ref<S: Stream<Item = T> + Unpin>(&mut self, input: &mut S) {
+        let take = self.data.len()..self.max_size;
+        'buf: for _ in take {
+            match input.next().await {
+                Some(x) => self.data.push(x),
+                None => {
+                    break 'buf;
+                }
+            }
+        }
+    }
 
     /// Unlike `slurp`, and `ploop`, `nom` is a precision operation. `nom` never takes more than needed.
     /// I _think_ this should work on async Stream too, but I'm not sure.

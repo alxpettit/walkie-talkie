@@ -1,3 +1,4 @@
+use crate::chonk::Chonk;
 use crate::*;
 use std::sync::mpsc;
 
@@ -46,10 +47,11 @@ where
     S: Stream<Item = PCMUnit> + Unpin,
 {
     let (tx_err, rx_err) = mpsc::channel::<SpeakerError>();
-    let (tx, rx) = mpsc::channel::<f32>();
+    let (tx, rx) = mpsc::channel::<Chonk<f32>>();
     (
         fn_stream(|emitter| async move {
             let tx_err_ptr = tx_err.clone();
+            let mut remainder: Chonk<f32> = Chonk::new(1024);
             let out_stream = output_device
                 .build_output_stream(
                     &config,
@@ -66,6 +68,11 @@ where
                 .play()
                 .expect("Failed to play internal output stream.");
 
+            loop {
+                let mut chonk = Chonk::<f32>::new(1024);
+                chonk.nom_stream_ref(&mut input);
+                tx.send(chonk).expect("Failed to send in internal MPSC");
+            }
             while let Some(next_input) = input.next().await {
                 tx.send(next_input)
                     .expect("Failed to send on internal MPSC.");
