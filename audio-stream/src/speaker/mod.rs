@@ -48,11 +48,13 @@ where
 {
     let (tx_err, rx_err) = mpsc::channel::<SpeakerError>();
     let (tx, rx) = mpsc::channel::<Chonk<f32>>();
+
+    let mut chonk = rx.recv().expect("Hung up :C");
+    let mut remainder: ChonkRemainder<f32> = ChonkRemainder::new();
+
     (
         fn_stream(|emitter| async move {
             let tx_err_ptr = tx_err.clone();
-            let mut chonk = rx.recv().expect("Hung up :C");
-            let mut remainder: ChonkRemainder<f32> = ChonkRemainder::new();
             let out_stream = output_device
                 .build_output_stream(
                     &config,
