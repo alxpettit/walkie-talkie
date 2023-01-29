@@ -1,5 +1,7 @@
+use crate::pcmtypes::PCMUnit;
 use crate::*;
 use async_fn_stream::{fn_stream, try_fn_stream};
+use nnnoiseless::DenoiseState;
 use wide::f32x8;
 
 // The chunk type & size expected by the nnnoiseless library

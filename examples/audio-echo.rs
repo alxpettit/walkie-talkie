@@ -1,24 +1,14 @@
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{Device, StreamConfig, SupportedStreamConfigsError};
-use denoise::DenoiseChunk;
+use cpal::traits::{DeviceTrait, HostTrait};
 use futures::executor::block_on;
-use futures::{pin_mut, FutureExt, StreamExt};
-use futures_core::Stream;
-use nnnoiseless::DenoiseState;
-use pcmtypes::PCMResult;
-use snafu::prelude::*;
+use futures::pin_mut;
+use futures::StreamExt;
 use std::error::Error;
-use std::sync::mpsc;
 
-mod denoise;
-mod fft;
-mod mic;
-mod pcmtypes;
-mod speaker;
-mod vol_up;
-use crate::fft::{getstream_complex_to_real, getstream_fft};
-use crate::vol_up::getstream_vol_up;
-use pcmtypes::*;
+use walkie_talkie::denoise::getstream_denoise;
+use walkie_talkie::fft::getstream_fft;
+use walkie_talkie::mic::getstream_from_mic;
+use walkie_talkie::speaker::getstream_to_speaker;
+use walkie_talkie::vol_up::getstream_vol_up;
 
 async fn audio_thread() -> Result<(), Box<dyn Error>> {
     let host = cpal::default_host();
@@ -37,13 +27,13 @@ async fn audio_thread() -> Result<(), Box<dyn Error>> {
         .default_output_device()
         .ok_or("No default output device available!")?;
 
-    let mic_stream = mic::getstream_from_mic(config.clone(), input_device);
+    let mic_stream = getstream_from_mic(config.clone(), input_device);
     pin_mut!(mic_stream);
 
     let mic_stream = getstream_vol_up(40., mic_stream).await;
     pin_mut!(mic_stream);
 
-    let mic_stream = denoise::getstream_denoise(mic_stream);
+    let mic_stream = getstream_denoise(mic_stream);
     pin_mut!(mic_stream);
 
     let mic_stream = getstream_vol_up(2., mic_stream).await;
@@ -58,7 +48,7 @@ async fn audio_thread() -> Result<(), Box<dyn Error>> {
     //     println!("{:#?}", buf);
     // }
 
-    let (stream_to_speaker, _) = speaker::getstream_to_speaker(config, output_device, mic_stream);
+    let (stream_to_speaker, _) = getstream_to_speaker(config, output_device, mic_stream);
     pin_mut!(stream_to_speaker);
     while let Some(i) = stream_to_speaker.next().await {
         // if let Err(e) = i {

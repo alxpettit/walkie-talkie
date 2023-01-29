@@ -1,9 +1,5 @@
 use crate::*;
-
-use async_fn_stream::{fn_stream, try_fn_stream};
-use cpal::{BuildStreamError, PlayStreamError, StreamError};
-use snafu::prelude::*;
-use std::sync::mpsc::{Receiver, SendError};
+use std::sync::mpsc;
 
 #[derive(Debug, Snafu)]
 pub enum SpeakerError {
