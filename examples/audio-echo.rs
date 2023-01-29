@@ -4,11 +4,11 @@ use futures::pin_mut;
 use futures::StreamExt;
 use std::error::Error;
 
-use walkie_talkie::denoise::getstream_denoise;
-use walkie_talkie::fft::getstream_fft;
-use walkie_talkie::mic::getstream_from_mic;
-use walkie_talkie::speaker::getstream_to_speaker;
-use walkie_talkie::vol_up::getstream_vol_up;
+use audio_stream::denoise::getstream_denoise;
+use audio_stream::fft::getstream_fft;
+use audio_stream::mic::getstream_from_mic;
+use audio_stream::speaker::getstream_to_speaker;
+use audio_stream::vol_up::getstream_vol_up;
 
 async fn audio_thread() -> Result<(), Box<dyn Error>> {
     let host = cpal::default_host();
