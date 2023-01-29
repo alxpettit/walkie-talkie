@@ -1,10 +1,11 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{Device, StreamConfig};
+use cpal::{Device, StreamConfig, SupportedStreamConfigsError};
 use denoise::DenoiseChunk;
 use futures::{pin_mut, StreamExt};
 use futures_core::Stream;
 use nnnoiseless::DenoiseState;
 use pcmtypes::PCMResult;
+use snafu::prelude::*;
 use std::error::Error;
 use std::sync::mpsc;
 
@@ -17,8 +18,30 @@ mod speaker;
 use crate::fft::{getstream_complex_to_real, getstream_fft};
 use pcmtypes::*;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+#[derive(Snafu, Debug)]
+enum AudioThreadError {
+    #[snafu(display("Raw string error: {}", string))]
+    RawStringError {
+        string: &'static str,
+    },
+    SupportedStreamConfigsError {
+        e: SupportedStreamConfigsError,
+    },
+}
+
+impl From<&'static str> for AudioThreadError {
+    fn from(value: &'static str) -> Self {
+        Self::RawStringError { string: value }
+    }
+}
+
+impl From<SupportedStreamConfigsError> for AudioThreadError {
+    fn from(value: SupportedStreamConfigsError) -> Self {
+        Self::SupportedStreamConfigsError { e: value }
+    }
+}
+
+async fn audio_thread() -> Result<(), AudioThreadError> {
     let host = cpal::default_host();
     let input_device = host
         .default_input_device()
@@ -57,5 +80,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
         // }
         //println!("{}", i.unwrap());
     }
+    Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    tokio::spawn(async move { audio_thread() });
     Ok(())
 }
