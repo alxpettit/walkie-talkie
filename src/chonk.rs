@@ -3,7 +3,7 @@
 
 use crate::StreamExt;
 use futures_core::Stream;
-use itertools::Itertools;
+use itertools::{repeat_n, Itertools};
 
 // Remember: the perfect is the enemy of the good
 #[derive(Debug)]
@@ -64,6 +64,16 @@ impl<T> Chonk<T> {
         self.max_size = max_size;
     }
 
+    pub fn new_repeat_n(element: T, n: usize) -> Self
+    where
+        T: Clone,
+    {
+        Self {
+            data: repeat_n(element, n).collect_vec(),
+            max_size: n,
+        }
+    }
+
     /// To slurp a Vec, is to consume the elements inside them and append them to yourself
     /// but if you consume too much (exceeding `max_size`), you may find yourself secreting the excess
     /// If it fits nicely, you return `None`, otherwise you return `Some<Vec<T>>`.
@@ -122,6 +132,7 @@ impl<T> Chonk<T> {
         self.data.append(&mut taken);
     }
 
+    /// Run function against every value we have
     pub fn for_each_mut<F: Fn(&mut T)>(&mut self, f: F) {
         for x in self.data.iter_mut() {
             f(x);
