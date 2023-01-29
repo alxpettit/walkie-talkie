@@ -49,6 +49,10 @@ impl<T> Chonk<T> {
         Self { data, max_size }
     }
 
+    fn len(&self) -> usize {
+        self.data.len()
+    }
+
     /// Like set_max_size, but immediately curtails size to enforce the new maximum siz.
     fn do_max_size(&mut self, max_size: usize) -> Option<Vec<T>> {
         self.max_size = max_size;
@@ -97,21 +101,25 @@ impl<T> Chonk<T> {
         Self { data: v, max_size }
     }
 
-    /// Unlike `slurp`, and `ploop`, `nom` is a precision operation. `nom` never takes more than needed.
-    pub async fn nom_stream<S: Stream<Item = T> + Unpin>(&mut self, mut input: S) {
-        self.data.clear();
-        'buf: for _ in 0..self.max_size {
-            match input.next().await {
-                Some(x) => self.data.push(x),
-                None => {
-                    break 'buf;
-                }
-            }
-        }
-    }
+    // pub async fn newish_nom_stream<S: Stream<Item = T> + Unpin>(&mut self, mut input: S) {
+    //     self.data.clear();
+    //     input.take(self.max_size);
+    //     'buf: for _ in 0..self.max_size {
+    //         match input.next().await {
+    //             Some(x) => self.data.push(x),
+    //             None => {
+    //                 break 'buf;
+    //             }
+    //         }
+    //     }
+    // }
 
-    pub async fn nom_iter<I: Iterator<Item = T>>(&mut self, input: I) {
-        self.data = input.take(self.max_size).collect_vec();
+    /// Unlike `slurp`, and `ploop`, `nom` is a precision operation. `nom` never takes more than needed.
+    /// I _think_ this should work on async Stream too, but I'm not sure.
+    /// If not, I'll make a method for that.
+    pub fn nom_iter<I: Iterator<Item = T>>(&mut self, input: I) {
+        let mut taken = input.take(self.max_size - self.data.len()).collect_vec();
+        self.data.append(&mut taken);
     }
 }
 
@@ -145,11 +153,21 @@ mod tests {
         dbg!(&slurp_excess);
         dbg!(&chonk);
         chonk.set_max_size(10);
-        let (chonk, ploop_excess) = chonk.ploop(vec![0, 10, 20, 30, 40, 50]);
+        let (mut chonk, ploop_excess) = chonk.ploop(vec![0, 10, 20, 30, 40, 50]);
         dbg!(&chonk);
         dbg!(&ploop_excess);
 
         assert_eq!(chonk, Some(vec![0, 10, 20, 30, 40, 50, 0, 1, 2, 3]));
         assert_eq!(ploop_excess, Some(vec![4, 5]));
+
+        chonk.set_max_size(32);
+        let iter = std::iter::repeat(100);
+        chonk.nom_iter(iter);
+        dbg!(&chonk);
+        assert_eq!(chonk.len(), 32);
+
+        for x in chonk.into_iter() {
+            dbg!(x);
+        }
     }
 }
