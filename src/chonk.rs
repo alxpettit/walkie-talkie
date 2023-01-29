@@ -30,15 +30,12 @@ where
     }
 }
 
-impl<T> PartialEq<Option<Vec<T>>> for Chonk<T>
+impl<T> PartialEq<ChonkRemainder<T>> for Chonk<T>
 where
     T: PartialEq,
 {
-    fn eq(&self, other: &Option<Vec<T>>) -> bool {
-        match other {
-            None => false,
-            Some(data) => self.data == *data,
-        }
+    fn eq(&self, other: &ChonkRemainder<T>) -> bool {
+        Some(&self.data) == other.data.as_ref()
     }
 }
 
@@ -50,6 +47,42 @@ pub struct ChonkRemainder<T> {
 impl<T> ChonkRemainder<T> {
     fn new() -> Self {
         Self { data: None }
+    }
+
+    fn has_none(&self) -> bool {
+        return self.data.is_none();
+    }
+
+    fn has_some(&self) -> bool {
+        return self.data.is_some();
+    }
+
+    fn clone_vec_from(mut self) -> Vec<T> {
+        match self.data {
+            Some(data) => data,
+            None => Vec::<T>::new(),
+        }
+    }
+}
+
+impl<T> From<Option<Vec<T>>> for ChonkRemainder<T> {
+    fn from(value: Option<Vec<T>>) -> Self {
+        Self { data: value }
+    }
+}
+
+impl<T> From<Vec<T>> for ChonkRemainder<T> {
+    fn from(value: Vec<T>) -> Self {
+        Self { data: Some(value) }
+    }
+}
+
+impl<T> From<ChonkRemainder<T>> for Vec<T> {
+    fn from(value: ChonkRemainder<T>) -> Self {
+        match value.data {
+            Some(data) => data,
+            None => Vec::<T>::new(),
+        }
     }
 }
 
