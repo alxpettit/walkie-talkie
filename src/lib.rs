@@ -1,3 +1,4 @@
+pub mod chonk;
 pub mod denoise;
 pub mod fft;
 pub mod mic;
