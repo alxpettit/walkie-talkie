@@ -1,6 +1,6 @@
-use crate::chonk::{Chonk, ChonkRemainder};
 use crate::*;
-use std::sync::mpsc;
+use chonk_chunking::{Chonk, ChonkRemainder};
+use std::sync::{mpsc, Arc, RwLock};
 
 #[derive(Debug, Snafu)]
 pub enum SpeakerError {
@@ -50,7 +50,8 @@ where
     let (tx, rx) = mpsc::channel::<Chonk<f32>>();
 
     let mut chonk = rx.recv().expect("Hung up :C");
-    let mut remainder: ChonkRemainder<f32> = ChonkRemainder::new();
+    let mut remainder: Arc<RwLock<ChonkRemainder<f32>>> =
+        Arc::new(RwLock::new(ChonkRemainder::new()));
 
     (
         fn_stream(|emitter| async move {
@@ -59,7 +60,8 @@ where
                 .build_output_stream(
                     &config,
                     move |mut output: &mut [f32], _| {
-                        chonk.ploop(remainder);
+                        // TODO: make chonk not require moving
+                        chonk.ploop(*remainder.write().unwrap());
                         chonk.pop_front_into(&mut output).expect("");
                         // for output_sample in output {
                         //     *output_sample = rx.recv().unwrap();
