@@ -11,6 +11,7 @@ use audio_stream::speaker::getstream_to_speaker;
 use audio_stream::vol_up::getstream_vol_scale;
 
 async fn audio_thread() -> Result<(), Box<dyn Error>> {
+    println!("audio_thread()");
     let host = cpal::default_host();
     let input_device = host
         .default_input_device()
@@ -36,11 +37,11 @@ async fn audio_thread() -> Result<(), Box<dyn Error>> {
     let mic_stream = getstream_denoise(mic_stream);
     pin_mut!(mic_stream);
 
-    let mic_stream = getstream_vol_scale(2., mic_stream).await;
-    pin_mut!(mic_stream);
+    // let mic_stream = getstream_vol_scale(2., mic_stream).await;
+    // pin_mut!(mic_stream);
 
-    let mic_stream = getstream_fft(mic_stream);
-    pin_mut!(mic_stream);
+    // let mic_stream = getstream_fft(mic_stream);
+    // pin_mut!(mic_stream);
 
     //
     // println!("henlo");
@@ -51,6 +52,7 @@ async fn audio_thread() -> Result<(), Box<dyn Error>> {
     let (stream_to_speaker, _) = getstream_to_speaker(config, output_device, mic_stream);
     pin_mut!(stream_to_speaker);
     while let Some(i) = stream_to_speaker.next().await {
+        dbg!("uwu");
         // if let Err(e) = i {
         //     println!("{}", e);
         // }
@@ -59,11 +61,13 @@ async fn audio_thread() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 async fn audio_thread_noerror() {
+    println!("audio_thread_noerror()");
     audio_thread().await.unwrap();
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    println!("main()");
     tokio::spawn(async move {
         block_on(audio_thread_noerror());
     });

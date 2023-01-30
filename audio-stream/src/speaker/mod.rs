@@ -1,6 +1,6 @@
 use crate::*;
 use chonk_chunking::{Chonk, ChonkRemainder};
-use std::sync::{mpsc, Arc, RwLock};
+use std::sync::mpsc;
 
 #[derive(Debug, Snafu)]
 pub enum SpeakerError {
@@ -48,21 +48,17 @@ where
 {
     let (tx_err, rx_err) = mpsc::channel::<SpeakerError>();
     let (tx, rx) = mpsc::channel::<Chonk<f32>>();
-
-    let mut chonk = rx.recv().expect("Hung up :C");
-    let mut remainder: ChonkRemainder<f32> = ChonkRemainder::new();
-
     (
         fn_stream(|emitter| async move {
             let tx_err_ptr = tx_err.clone();
+            let mut chonk = rx.recv().expect("Hung up :C");
+            let mut remainder: ChonkRemainder<f32> = ChonkRemainder::new();
             let out_stream = output_device
                 .build_output_stream(
                     &config,
-                    move |mut output: &mut [f32], _| {
-                        // TODO: make chonk not require moving
+                    move |output: &mut [f32], _| {
                         remainder = chonk.clone_from(&mut remainder.iter());
-                        //chonk.dump_to_arr(output);
-                        //chonk.pop_front_into(&mut output).expect("");
+                        chonk.clone_to(&mut output.iter_mut());
                         // for output_sample in output {
                         //     *output_sample = rx.recv().unwrap();
                         // }
@@ -77,7 +73,7 @@ where
 
             loop {
                 let mut chonk = Chonk::<f32>::new(1024);
-                chonk.nom_stream_ref(&mut input);
+                chonk.nom_stream_ref(&mut input).await;
                 tx.send(chonk).expect("Failed to send in internal MPSC");
             }
             // while let Some(next_input) = input.next().await {
