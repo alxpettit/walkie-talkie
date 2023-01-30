@@ -78,6 +78,7 @@
 
 use crate::*;
 use chonk_chunking::{Chonk, ChonkRemainder};
+use std::collections::VecDeque;
 use std::sync::mpsc;
 
 #[derive(Debug, Snafu)]
@@ -116,6 +117,9 @@ impl From<PlayStreamError> for SpeakerError {
         SpeakerError::PlayStreamError { e }
     }
 }
+
+static INTERNAL_CHUNk_SIZE: usize = 1024;
+
 pub fn getstream_to_speaker<S>(
     config: StreamConfig,
     output_device: Device,
@@ -125,7 +129,7 @@ where
     S: Stream<Item = PCMUnit> + Unpin,
 {
     let (tx_err, rx_err) = mpsc::channel::<SpeakerError>();
-    let (tx, rx) = mpsc::channel::<Chonk<f32>>();
+    let (tx, rx) = mpsc::channel::<VecDeque<f32>>();
     (
         fn_stream(|emitter| async move {
             let tx_err_ptr = tx_err.clone();
@@ -153,24 +157,19 @@ where
                 .expect("Failed to play internal output stream.");
 
             'outer: loop {
-                let mut chonk = Chonk::<f32>::new(1024);
-
-                if chonk.is_full() {
-                    break;
-                }
-
+                let mut chonk: VecDeque<f32> = VecDeque::new();
                 loop {
                     if let Some(next_input) = input.next().await {
-                        if chonk.is_full() {
+                        if chonk.len() >= INTERNAL_CHUNk_SIZE {
                             break;
                         }
-                        chonk.push(next_input);
+                        chonk.push_back(next_input);
                         emitter.emit(next_input).await;
                     } else {
                         break 'outer;
                     }
                 }
-                chonk.nom_stream_ref(&mut input).await;
+                //chonk.nom_stream_ref(&mut input).await;
                 tx.send(chonk).expect("Failed to send in internal MPSC");
             }
             // while let Some(next_input) = input.next().await {
