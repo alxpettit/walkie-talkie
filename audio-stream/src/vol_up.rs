@@ -1,5 +1,5 @@
-use crate::chonk::Chonk;
 use async_fn_stream::fn_stream;
+use chonk_chunking::Chonk;
 use futures::Stream;
 use futures::StreamExt;
 
@@ -29,9 +29,9 @@ pub async fn getstream_vol_scale_chonk(
 
 #[cfg(test)]
 mod tests {
-    use crate::chonk::Chonk;
     use crate::vol_up::getstream_vol_scale_chonk;
     use async_fn_stream::fn_stream;
+    use chonk_chunking::Chonk;
     use futures::executor::block_on;
     use futures::pin_mut;
     use futures::StreamExt;
@@ -50,7 +50,7 @@ mod tests {
         let mut stream = block_on(getstream_vol_scale_chonk(2.0, stream));
         pin_mut!(stream);
         while let Some(x) = block_on(stream.next()) {
-            assert_eq!(x, vec![4f32; 100]);
+            assert_eq!(x, Chonk::from(vec![4f32; 100]));
         }
     }
 }

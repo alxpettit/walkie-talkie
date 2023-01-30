@@ -50,8 +50,7 @@ where
     let (tx, rx) = mpsc::channel::<Chonk<f32>>();
 
     let mut chonk = rx.recv().expect("Hung up :C");
-    let mut remainder: Arc<RwLock<ChonkRemainder<f32>>> =
-        Arc::new(RwLock::new(ChonkRemainder::new()));
+    let mut remainder: ChonkRemainder<f32> = ChonkRemainder::new();
 
     (
         fn_stream(|emitter| async move {
@@ -61,8 +60,9 @@ where
                     &config,
                     move |mut output: &mut [f32], _| {
                         // TODO: make chonk not require moving
-                        chonk.ploop(*remainder.write().unwrap());
-                        chonk.pop_front_into(&mut output).expect("");
+                        remainder = chonk.clone_from(&mut remainder.iter());
+                        //chonk.dump_to_arr(output);
+                        //chonk.pop_front_into(&mut output).expect("");
                         // for output_sample in output {
                         //     *output_sample = rx.recv().unwrap();
                         // }
