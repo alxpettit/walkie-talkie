@@ -31,8 +31,8 @@ async fn audio_thread() -> Result<(), Box<dyn Error>> {
     let mic_stream = getstream_from_mic(config.clone(), input_device);
     pin_mut!(mic_stream);
 
-    let mic_stream = getstream_vol_scale(40., mic_stream).await;
-    pin_mut!(mic_stream);
+    // let mic_stream = getstream_vol_scale(40., mic_stream).await;
+    // pin_mut!(mic_stream);
 
     let mic_stream = getstream_denoise(mic_stream);
     pin_mut!(mic_stream);
@@ -52,7 +52,7 @@ async fn audio_thread() -> Result<(), Box<dyn Error>> {
     let (stream_to_speaker, _) = getstream_to_speaker(config, output_device, mic_stream);
     pin_mut!(stream_to_speaker);
     while let Some(i) = stream_to_speaker.next().await {
-        dbg!("uwu");
+        //dbg!("uwu");
         // if let Err(e) = i {
         //     println!("{}", e);
         // }

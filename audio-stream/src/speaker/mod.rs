@@ -1,4 +1,5 @@
 use crate::*;
+use sized_chunks::Chunk;
 use std::sync::mpsc;
 
 #[derive(Debug, Snafu)]
