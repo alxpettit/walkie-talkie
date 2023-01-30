@@ -129,13 +129,16 @@ where
     (
         fn_stream(|emitter| async move {
             let tx_err_ptr = tx_err.clone();
-            let mut chonk = Chonk::<f32>::new(1024);
             let mut remainder: ChonkRemainder<f32> = ChonkRemainder::new();
             let out_stream = output_device
                 .build_output_stream(
                     &config,
                     move |output: &mut [f32], _| {
-                        remainder = chonk.clone_from(&mut remainder.iter());
+                        //dbg!(&remainder);
+                        let mut chonk = rx.recv().unwrap();
+                        //dbg!(&chonk);
+                        remainder = chonk.push_from(&mut remainder.iter());
+                        //dbg!(&remainder);
                         chonk.clone_to(&mut output.iter_mut());
                         // for output_sample in output {
                         //     *output_sample = rx.recv().unwrap();
@@ -158,6 +161,9 @@ where
 
                 loop {
                     if let Some(next_input) = input.next().await {
+                        if chonk.is_full() {
+                            break;
+                        }
                         chonk.push(next_input);
                         emitter.emit(next_input).await;
                     } else {
