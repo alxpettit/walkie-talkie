@@ -66,6 +66,10 @@ where
                         for output_sample in output {
                             let mut chunk = rx.recv().unwrap();
                             *output_sample = chunk.pop_front();
+                            if chunk.is_empty() {
+                                break;
+                            } else {
+                            }
                             tx_recycle.send(chunk).unwrap();
                         }
                     },
@@ -77,11 +81,16 @@ where
                 .play()
                 .expect("Failed to play internal output stream.");
 
-            while let Some(next_input) = input.next().await {
-                let mut chunk = rx_recycle.recv().unwrap();
-                chunk.push_back(next_input);
-                tx.send(chunk).expect("Failed to send on internal MPSC.");
-                emitter.emit(next_input).await;
+            loop {
+                while let Some(next_input) = input.next().await {
+                    let mut chunk = rx_recycle.recv().unwrap();
+                    chunk.push_back(next_input);
+                    if chunk.is_full() {
+                        tx.send(chunk).expect("Failed to send on internal MPSC.");
+                        emitter.emit(next_input).await;
+                        break;
+                    }
+                }
             }
         }),
         rx_err,
