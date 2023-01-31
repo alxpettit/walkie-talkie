@@ -106,7 +106,7 @@ mod tests {
                 break;
             }
             for s in chunk.iter() {
-                wav_writer.write_sample(s).unwrap();
+                wav_writer.write_sample(*s).unwrap();
             }
         }
 

@@ -30,17 +30,17 @@ async fn audio_thread() -> Result<(), Box<dyn Error>> {
     let mic_stream = getstream_from_mic(config.clone(), input_device);
     pin_mut!(mic_stream);
 
-    let mic_stream = getstream_vol_scale(40., mic_stream).await;
-    pin_mut!(mic_stream);
-
-    let mic_stream = getstream_denoise(mic_stream);
-    pin_mut!(mic_stream);
-
-    let mic_stream = getstream_vol_scale(2., mic_stream).await;
-    pin_mut!(mic_stream);
-
-    let mic_stream = getstream_fft(mic_stream);
-    pin_mut!(mic_stream);
+    // let mic_stream = getstream_vol_scale(40., mic_stream).await;
+    // pin_mut!(mic_stream);
+    //
+    // let mic_stream = getstream_denoise(mic_stream);
+    // pin_mut!(mic_stream);
+    //
+    // let mic_stream = getstream_vol_scale(2., mic_stream).await;
+    // pin_mut!(mic_stream);
+    //
+    // let mic_stream = getstream_fft(mic_stream);
+    // pin_mut!(mic_stream);
 
     //
     // println!("henlo");

@@ -10,6 +10,14 @@ pub struct PCMVec {
 }
 
 impl PCMVec {
+    pub fn new() -> Self {
+        Self {
+            data: Vec::<PCMUnit>::new(),
+        }
+    }
+    pub fn append(&mut self, other: &mut Self) {
+        self.append(other);
+    }
     pub fn borrow_mut_inner(&mut self) -> &mut Vec<PCMUnit> {
         &mut self.data
     }
@@ -18,6 +26,9 @@ impl PCMVec {
     }
     pub fn iter(&self) -> Iter<PCMUnit> {
         self.data.iter()
+    }
+    pub fn pop(&mut self) -> Option<PCMUnit> {
+        self.data.pop()
     }
 }
 

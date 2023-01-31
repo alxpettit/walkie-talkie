@@ -1,3 +1,4 @@
+use crate::pcmtypes::PCMVec;
 use crate::*;
 use std::sync::mpsc;
 
@@ -41,21 +42,24 @@ pub fn getstream_to_speaker<S>(
     config: StreamConfig,
     output_device: Device,
     mut input: S,
-) -> (impl Stream<Item = PCMUnit>, Receiver<SpeakerError>)
+) -> (impl Stream<Item = PCMVec>, Receiver<SpeakerError>)
 where
-    S: Stream<Item = PCMUnit> + Unpin,
+    S: Stream<Item = PCMVec> + Unpin,
 {
     let (tx_err, rx_err) = mpsc::channel::<SpeakerError>();
-    let (tx, rx) = mpsc::channel::<f32>();
+    let (tx, rx) = mpsc::channel::<PCMVec>();
     (
         fn_stream(|emitter| async move {
             let tx_err_ptr = tx_err.clone();
+            let mut remainder = PCMVec::new();
             let out_stream = output_device
                 .build_output_stream(
                     &config,
                     move |output: &mut [f32], _| {
+                        let mut new_chunk = rx.recv().unwrap();
+                        remainder.append(&mut new_chunk);
                         for output_sample in output {
-                            *output_sample = rx.recv().unwrap();
+                            *output_sample = remainder.pop().unwrap();
                         }
                     },
                     move |e| tx_err_ptr.send(e.into()).unwrap(),
@@ -69,7 +73,7 @@ where
             while let Some(next_input) = input.next().await {
                 tx.send(next_input)
                     .expect("Failed to send on internal MPSC.");
-                emitter.emit(next_input).await;
+                //emitter.emit(next_input).await;
             }
         }),
         rx_err,
