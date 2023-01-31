@@ -81,8 +81,8 @@ where
 //     output_device: Device,
 //     mut input: S,
 // ) -> (impl Stream<Item = PCMUnit>, Receiver<SpeakerError>)
-//     where
-//         S: Stream<Item = PCMUnit> + Unpin,
+// where
+//     S: Stream<Item = PCMUnit> + Unpin,
 // {
 //     let (tx_err, rx_err) = mpsc::channel::<SpeakerError>();
 //     let (tx, rx) = mpsc::channel::<f32>();

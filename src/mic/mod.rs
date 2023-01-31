@@ -6,7 +6,7 @@ use std::sync::mpsc;
 pub fn getstream_from_mic(
     config: cpal::StreamConfig,
     input_device: cpal::Device,
-) -> impl Stream<Item = PCMUnit> {
+) -> impl Stream<Item = PCMVec> {
     fn_stream(|emitter| async move {
         let (tx, rx) = mpsc::channel::<PCMVec>();
 
@@ -14,7 +14,7 @@ pub fn getstream_from_mic(
             &input_device,
             &config,
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                tx.send(data.to_vec())
+                tx.send(data.to_vec().into())
                     .expect("Failed to send to internal MPSC");
             },
             move |_err| {},
@@ -24,12 +24,40 @@ pub fn getstream_from_mic(
         input_stream.play().expect("Failed to play");
 
         for data in rx {
-            for sample in data {
-                emitter.emit(sample).await;
-            }
+            //for sample in data {
+            emitter.emit(data).await;
+            //}
         }
     })
 }
+
+// pub fn getstream_from_mic(
+//     config: cpal::StreamConfig,
+//     input_device: cpal::Device,
+// ) -> impl Stream<Item = PCMUnit> {
+//     fn_stream(|emitter| async move {
+//         let (tx, rx) = mpsc::channel::<PCMVec>();
+//
+//         let input_stream = cpal::Device::build_input_stream(
+//             &input_device,
+//             &config,
+//             move |data: &[f32], _: &cpal::InputCallbackInfo| {
+//                 tx.send(data.to_vec())
+//                     .expect("Failed to send to internal MPSC");
+//             },
+//             move |_err| {},
+//         )
+//         .expect("Failed to build internal MPSC stream");
+//
+//         input_stream.play().expect("Failed to play");
+//
+//         for data in rx {
+//             for sample in data {
+//                 emitter.emit(sample).await;
+//             }
+//         }
+//     })
+// }
 
 mod tests {
     use super::*;
@@ -73,11 +101,13 @@ mod tests {
         let start = Instant::now();
         let stream = getstream_from_mic(config, input_device);
         pin_mut!(stream);
-        while let Some(c) = block_on(stream.next()) {
+        while let Some(chunk) = block_on(stream.next()) {
             if start.elapsed() > Duration::from_secs(5) {
                 break;
             }
-            wav_writer.write_sample(c).unwrap();
+            for s in chunk.iter() {
+                wav_writer.write_sample(s).unwrap();
+            }
         }
 
         Ok(())
