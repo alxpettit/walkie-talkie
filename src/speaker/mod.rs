@@ -47,7 +47,7 @@ where
     S: Stream<Item = PCMVec> + Unpin,
 {
     let (tx_err, rx_err) = mpsc::channel::<SpeakerError>();
-    let (tx, rx) = mpsc::channel::<PCMVec>();
+    let (tx, rx) = mpsc::channel::<f32>();
     (
         fn_stream(|emitter| async move {
             let tx_err_ptr = tx_err.clone();
@@ -56,10 +56,10 @@ where
                 .build_output_stream(
                     &config,
                     move |output: &mut [f32], _| {
-                        let mut new_chunk = rx.recv().unwrap();
-                        remainder.append(&mut new_chunk);
+                        // let mut new_chunk = rx.recv().unwrap();
+                        // remainder.append(&mut new_chunk);
                         for output_sample in output {
-                            *output_sample = remainder.pop().unwrap();
+                            *output_sample = rx.recv().unwrap();
                         }
                     },
                     move |e| tx_err_ptr.send(e.into()).unwrap(),
@@ -71,9 +71,10 @@ where
                 .expect("Failed to play internal output stream.");
 
             while let Some(next_input) = input.next().await {
-                tx.send(next_input)
-                    .expect("Failed to send on internal MPSC.");
-                //emitter.emit(next_input).await;
+                for sample in next_input.iter() {
+                    tx.send(*sample).expect("Failed to send on internal MPSC.");
+                }
+                emitter.emit(next_input).await;
             }
         }),
         rx_err,
