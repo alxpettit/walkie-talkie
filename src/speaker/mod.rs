@@ -1,5 +1,8 @@
 use crate::*;
+use nnnoiseless::dasp::sample::FromSample;
 use std::sync::mpsc;
+
+type Chunk = sized_chunks::Chunk<f32, 32>;
 
 #[derive(Debug, Snafu)]
 pub enum SpeakerError {
@@ -46,7 +49,13 @@ where
     S: Stream<Item = PCMUnit> + Unpin,
 {
     let (tx_err, rx_err) = mpsc::channel::<SpeakerError>();
-    let (tx, rx) = mpsc::channel::<f32>();
+    let (tx, rx) = mpsc::channel::<Chunk>();
+    let (tx_recycle, rx_recycle) = mpsc::channel::<Chunk>();
+    tx_recycle.send(Chunk::new()).unwrap();
+    tx_recycle.send(Chunk::new()).unwrap();
+    tx_recycle.send(Chunk::new()).unwrap();
+    tx_recycle.send(Chunk::new()).unwrap();
+    tx_recycle.send(Chunk::new()).unwrap();
     (
         fn_stream(|emitter| async move {
             let tx_err_ptr = tx_err.clone();
@@ -55,7 +64,9 @@ where
                     &config,
                     move |output: &mut [f32], _| {
                         for output_sample in output {
-                            *output_sample = rx.recv().unwrap();
+                            let mut chunk = rx.recv().unwrap();
+                            *output_sample = chunk.pop_front();
+                            tx_recycle.send(chunk).unwrap();
                         }
                     },
                     move |e| tx_err_ptr.send(e.into()).unwrap(),
@@ -67,8 +78,9 @@ where
                 .expect("Failed to play internal output stream.");
 
             while let Some(next_input) = input.next().await {
-                tx.send(next_input)
-                    .expect("Failed to send on internal MPSC.");
+                let mut chunk = rx_recycle.recv().unwrap();
+                chunk.push_back(next_input);
+                tx.send(chunk).expect("Failed to send on internal MPSC.");
                 emitter.emit(next_input).await;
             }
         }),
