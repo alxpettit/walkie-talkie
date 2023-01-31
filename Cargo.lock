@@ -52,6 +52,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "audio-stream"
+version = "0.1.0"
+dependencies = [
+ "async-fn-stream",
+ "cpal",
+ "futures",
+ "futures-core",
+ "hound",
+ "itertools",
+ "nnnoiseless",
+ "rustfft",
+ "snafu",
+ "tokio",
+ "wide",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1329,23 +1346,6 @@ dependencies = [
  "same-file",
  "winapi",
  "winapi-util",
-]
-
-[[package]]
-name = "walkie-talkie"
-version = "0.1.0"
-dependencies = [
- "async-fn-stream",
- "cpal",
- "futures",
- "futures-core",
- "hound",
- "itertools",
- "nnnoiseless",
- "rustfft",
- "snafu",
- "tokio",
- "wide",
 ]
 
 [[package]]

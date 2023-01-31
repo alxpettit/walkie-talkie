@@ -1,5 +1,10 @@
+use crate::pcmtypes::{PCMUnit, PCMVec};
 use crate::*;
 use async_fn_stream::fn_stream;
+use cpal::traits::{DeviceTrait, StreamTrait};
+use futures::StreamExt;
+use futures_core::Stream;
+use std::sync::mpsc;
 
 pub fn getstream_from_mic(
     config: cpal::StreamConfig,
@@ -31,9 +36,12 @@ pub fn getstream_from_mic(
 
 mod tests {
     use super::*;
+    use cpal::traits::HostTrait;
     use futures::executor::block_on;
+    use futures::pin_mut;
     use hound::WavSpec;
     use hound::WavWriter;
+    use std::error::Error;
     use std::io::Write;
     use std::time::{Duration, Instant};
 

@@ -1,7 +1,12 @@
 use crate::*;
+use std::sync::mpsc;
 
+use crate::pcmtypes::PCMUnit;
 use async_fn_stream::{fn_stream, try_fn_stream};
-use cpal::{BuildStreamError, PlayStreamError, StreamError};
+use cpal::traits::{DeviceTrait, StreamTrait};
+use cpal::{BuildStreamError, Device, PlayStreamError, StreamConfig, StreamError};
+use futures::StreamExt;
+use futures_core::Stream;
 use snafu::prelude::*;
 use std::sync::mpsc::{Receiver, SendError};
 
