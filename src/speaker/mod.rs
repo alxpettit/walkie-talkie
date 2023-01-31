@@ -75,3 +75,42 @@ where
         rx_err,
     )
 }
+
+// pub fn getstream_to_speaker<S>(
+//     config: StreamConfig,
+//     output_device: Device,
+//     mut input: S,
+// ) -> (impl Stream<Item = PCMUnit>, Receiver<SpeakerError>)
+//     where
+//         S: Stream<Item = PCMUnit> + Unpin,
+// {
+//     let (tx_err, rx_err) = mpsc::channel::<SpeakerError>();
+//     let (tx, rx) = mpsc::channel::<f32>();
+//     (
+//         fn_stream(|emitter| async move {
+//             let tx_err_ptr = tx_err.clone();
+//             let out_stream = output_device
+//                 .build_output_stream(
+//                     &config,
+//                     move |output: &mut [f32], _| {
+//                         for output_sample in output {
+//                             *output_sample = rx.recv().unwrap();
+//                         }
+//                     },
+//                     move |e| tx_err_ptr.send(e.into()).unwrap(),
+//                 )
+//                 .expect("Failed to build internal output stream.");
+//
+//             out_stream
+//                 .play()
+//                 .expect("Failed to play internal output stream.");
+//
+//             while let Some(next_input) = input.next().await {
+//                 tx.send(next_input)
+//                     .expect("Failed to send on internal MPSC.");
+//                 emitter.emit(next_input).await;
+//             }
+//         }),
+//         rx_err,
+//     )
+// }

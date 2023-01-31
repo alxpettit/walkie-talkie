@@ -31,6 +31,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2cb2f989d18dd141ab8ae82f64d1a8cdd37e0840f73a406896cf5e99502fab61"
 
 [[package]]
+name = "array-ops"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc9118422b9f472e9f49c2775cbf92c1b2740bd74278fd66cad3dc7b5fa2c7ca"
+dependencies = [
+ "rand_core",
+ "rand_xoshiro",
+]
+
+[[package]]
 name = "async-fn-stream"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -63,6 +73,7 @@ dependencies = [
  "itertools",
  "nnnoiseless",
  "rustfft",
+ "sized-chunks",
  "snafu",
  "tokio",
  "wide",
@@ -105,6 +116,12 @@ name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
+
+[[package]]
+name = "bitmaps"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "703642b98a00b3b90513279a8ede3fcfa479c126c5fb46e78f3051522f021403"
 
 [[package]]
 name = "bumpalo"
@@ -956,6 +973,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "rand_core"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90bde5296fc891b0cef12a6d03ddccc162ce7b2aff54160af9338f8d40df6d19"
+
+[[package]]
+name = "rand_xoshiro"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a9fcdd2e881d02f1d9390ae47ad8e5696a9e4be7b547a1da2afbc61973217004"
+dependencies = [
+ "rand_core",
+]
+
+[[package]]
 name = "raw-window-handle"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1119,6 +1151,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e51e73328dc4ac0c7ccbda3a494dfa03df1de2f46018127f60c693f2648455b0"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "sized-chunks"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "718af0c70466d1901d87da3fa23e38a955cd0dec64af16bc49cf2d901ec0e5e7"
+dependencies = [
+ "array-ops",
+ "bitmaps",
 ]
 
 [[package]]
