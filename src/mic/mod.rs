@@ -1,4 +1,4 @@
-use crate::pcmtypes::{PCMUnit, PCMVec};
+use crate::pcmtypes::{Chunk, PCMUnit};
 use crate::*;
 use async_fn_stream::fn_stream;
 use std::sync::mpsc;
@@ -6,9 +6,9 @@ use std::sync::mpsc;
 pub fn getstream_from_mic(
     config: cpal::StreamConfig,
     input_device: cpal::Device,
-) -> impl Stream<Item = PCMVec> {
+) -> impl Stream<Item = Chunk> {
     fn_stream(|emitter| async move {
-        let (tx, rx) = mpsc::channel::<PCMVec>();
+        let (tx, rx) = mpsc::channel::<Chunk>();
 
         let input_stream = cpal::Device::build_input_stream(
             &input_device,

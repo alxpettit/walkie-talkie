@@ -5,11 +5,11 @@ pub type PCMUnit = f32;
 pub type PCMResult = Result<PCMUnit, Box<dyn Error>>;
 //pub type PCMVec = Vec<PCMUnit>;
 
-pub struct PCMVec {
+pub struct Chunk {
     data: Vec<PCMUnit>,
 }
 
-impl PCMVec {
+impl Chunk {
     pub fn new() -> Self {
         Self {
             data: Vec::<PCMUnit>::new(),
@@ -32,14 +32,14 @@ impl PCMVec {
     }
 }
 
-impl Into<Vec<PCMUnit>> for PCMVec {
+impl Into<Vec<PCMUnit>> for Chunk {
     fn into(self) -> Vec<PCMUnit> {
         self.data
     }
 }
 
-impl Into<PCMVec> for Vec<PCMUnit> {
-    fn into(self) -> PCMVec {
-        PCMVec { data: self }
+impl Into<Chunk> for Vec<PCMUnit> {
+    fn into(self) -> Chunk {
+        Chunk { data: self }
     }
 }
