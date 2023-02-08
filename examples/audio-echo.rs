@@ -42,7 +42,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     //     println!("{:#?}", buf);
     // }
 
-    mk_gen!(let stream_to_speaker = getstream_to_speaker(config, output_device, denoised_mic_stream));
+    mk_gen!(let fft_stream = getstream_fft(denoised_mic_stream));
+
+    mk_gen!(let stream_to_speaker = getstream_to_speaker(config, output_device, fft_stream));
     for s in stream_to_speaker {
         // if let Err(e) = i {
         //     println!("{}", e);

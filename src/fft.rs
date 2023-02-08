@@ -4,11 +4,13 @@ use async_fn_stream::fn_stream;
 use futures::StreamExt;
 use futures_core::Stream;
 use itertools::{repeat_n, Itertools};
+use next_gen::prelude::*;
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 use rustfft::FftPlanner;
 use std::iter;
 use std::iter::repeat;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 
 static BUFFER: usize = 256;
@@ -27,56 +29,58 @@ pub fn real2complex(real: &Vec<f32>) -> Vec<Complex<f32>> {
 pub fn complex2real(complex: &Vec<Complex<f32>>) -> Vec<f32> {
     complex.iter().map(|x| x.re).collect()
 }
-pub async fn take_to_buffer<S: Stream<Item = PCMUnit> + Unpin>(mut input: S, buf: &mut Vec<f32>) {
+pub async fn take_to_buffer(
+    mut input: &mut Pin<&mut dyn Generator<Yield = PCMUnit, Return = ()>>,
+    buf: &mut Vec<f32>,
+) {
     // Yes, I would have liked to do take().collect(). No, it doesn't work.
     // Borrow checker doesn't like :p
     buf.clear();
     'buf: for _ in 0..BUFFER {
-        match input.next().await {
-            Some(x) => buf.push(x),
-            None => {
+        match input.as_mut().resume(()) {
+            GeneratorState::Yielded(x) => buf.push(x),
+            GeneratorState::Returned(_) => {
                 break 'buf;
             }
         }
     }
 }
 
-pub fn getstream_fft<S: Stream<Item = PCMUnit> + Unpin>(mut input: S) -> impl Stream<Item = f32> {
-    fn_stream(|emitter| async move {
-        let mut buf: Vec<f32> = Vec::with_capacity(BUFFER);
-        let mut planner = FftPlanner::new();
-        let fft = planner.plan_fft_forward(buf.len());
-        let ifft = planner.plan_fft_inverse(buf.len());
-        let complex_zeros = repeat(Complex::<f32>::zero()).into_iter();
-        loop {
-            take_to_buffer(&mut input, &mut buf).await;
-            let mut complex_buf = real2complex(&buf);
-            buf.clear();
-            fft.process(&mut complex_buf);
-            // do something wacky here
-            //let a = &complex_buf.iter().map(|x| x.re.to_string()).join(" ");
-            //complex_buf.reverse();
-            // let (buf_a, mut buf_b) = complex_buf.split_at(BUFFER / 2);
-            // let mut b = buf_b.to_vec();
-            // b.append(&mut buf_a.to_vec());
-            //complex_buf = b;
-            //complex_buf.splitn(3);
+#[generator(yield(PCMUnit))]
+pub async fn getstream_fft(mut input: Pin<&mut dyn Generator<Yield = PCMUnit, Return = ()>>) {
+    let mut buf: Vec<f32> = Vec::with_capacity(BUFFER);
+    let mut planner = FftPlanner::new();
+    let fft = planner.plan_fft_forward(buf.len());
+    let ifft = planner.plan_fft_inverse(buf.len());
+    let complex_zeros = repeat(Complex::<f32>::zero()).into_iter();
+    loop {
+        take_to_buffer(&mut input, &mut buf).await;
+        let mut complex_buf = real2complex(&buf);
+        buf.clear();
+        fft.process(&mut complex_buf);
+        // do something wacky here
+        //let a = &complex_buf.iter().map(|x| x.re.to_string()).join(" ");
+        //complex_buf.reverse();
+        // let (buf_a, mut buf_b) = complex_buf.split_at(BUFFER / 2);
+        // let mut b = buf_b.to_vec();
+        // b.append(&mut buf_a.to_vec());
+        //complex_buf = b;
+        //complex_buf.splitn(3);
 
-            // let new_complex = complex_buf
-            //     .into_iter()
-            //     .skip(1024)
-            //     .chain(complex_zeros.clone().take(1024))
-            //     .collect::<Vec<_>>();
+        // let new_complex = complex_buf
+        //     .into_iter()
+        //     .skip(1024)
+        //     .chain(complex_zeros.clone().take(1024))
+        //     .collect::<Vec<_>>();
 
-            // complex_buf = new_complex;
-            //complex_buf.
-            ifft.process(&mut complex_buf);
-            normalize_buf(&mut complex_buf);
-            for r in complex2real(&complex_buf) {
-                emitter.emit(r).await;
-            }
+        // complex_buf = new_complex;
+        //complex_buf.
+        ifft.process(&mut complex_buf);
+        normalize_buf(&mut complex_buf);
+        for r in complex2real(&complex_buf) {
+            yield_!(r);
         }
-    })
+    }
 }
 
 //
