@@ -29,8 +29,9 @@ pub fn real2complex(real: &Vec<f32>) -> Vec<Complex<f32>> {
 pub fn complex2real(complex: &Vec<Complex<f32>>) -> Vec<f32> {
     complex.iter().map(|x| x.re).collect()
 }
-pub async fn take_to_buffer(
-    mut input: &mut Pin<&mut dyn Generator<Yield = PCMUnit, Return = ()>>,
+
+pub async fn generator_to_buffer(
+    input: &mut Pin<&mut dyn Generator<Yield = PCMUnit, Return = ()>>,
     buf: &mut Vec<f32>,
 ) {
     // Yes, I would have liked to do take().collect(). No, it doesn't work.
@@ -54,7 +55,7 @@ pub async fn getstream_fft<'g>(mut input: PCMGenerator<'g>) {
     let ifft = planner.plan_fft_inverse(buf.len());
     let complex_zeros = repeat(Complex::<f32>::zero()).into_iter();
     loop {
-        take_to_buffer(&mut input, &mut buf).await;
+        generator_to_buffer(&mut input, &mut buf).await;
         let mut complex_buf = real2complex(&buf);
         buf.clear();
         fft.process(&mut complex_buf);

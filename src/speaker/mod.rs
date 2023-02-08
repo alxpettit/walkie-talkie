@@ -49,7 +49,7 @@ impl From<PlayStreamError> for SpeakerError {
     }
 }
 
-#[generator(yield(PCMUnit))]
+//#[generator(yield(PCMUnit))]
 pub fn getstream_to_speaker<'g>(
     config: StreamConfig,
     output_device: Device,
@@ -77,6 +77,6 @@ pub fn getstream_to_speaker<'g>(
     for next_input in input {
         tx.send(next_input)
             .expect("Failed to send on internal MPSC.");
-        yield_!(next_input);
+        //yield_!(next_input);
     }
 }
