@@ -32,8 +32,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     mk_gen!(let mic_stream = getstream_from_mic(config.clone(), input_device));
     mk_gen!(let mic_stream = getstream_denoise(mic_stream));
-    mk_gen!(let fft_stream = getstream_fft(mic_stream));
-    getstream_to_speaker(config, output_device, fft_stream);
+    mk_gen!(let mic_stream = getstream_fft(mic_stream));
+    getstream_to_speaker(config, output_device, mic_stream);
 
     Ok(())
 }
