@@ -4,34 +4,31 @@ use async_fn_stream::fn_stream;
 use cpal::traits::{DeviceTrait, StreamTrait};
 use futures::StreamExt;
 use futures_core::Stream;
+use next_gen::prelude::*;
 use std::sync::mpsc;
 
-pub fn getstream_from_mic(
-    config: cpal::StreamConfig,
-    input_device: cpal::Device,
-) -> impl Stream<Item = PCMUnit> {
-    fn_stream(|emitter| async move {
-        let (tx, rx) = mpsc::channel::<PCMVec>();
+#[generator(yield(PCMUnit))]
+pub fn getstream_from_mic(config: cpal::StreamConfig, input_device: cpal::Device) {
+    let (tx, rx) = mpsc::channel::<PCMVec>();
 
-        let input_stream = cpal::Device::build_input_stream(
-            &input_device,
-            &config,
-            move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                tx.send(data.to_vec())
-                    .expect("Failed to send to internal MPSC");
-            },
-            move |_err| {},
-        )
-        .expect("Failed to build internal MPSC stream");
+    let input_stream = cpal::Device::build_input_stream(
+        &input_device,
+        &config,
+        move |data: &[f32], _: &cpal::InputCallbackInfo| {
+            tx.send(data.to_vec())
+                .expect("Failed to send to internal MPSC");
+        },
+        move |_err| {},
+    )
+    .expect("Failed to build internal MPSC stream");
 
-        input_stream.play().expect("Failed to play");
+    input_stream.play().expect("Failed to play");
 
-        for data in rx {
-            for sample in data {
-                emitter.emit(sample).await;
-            }
+    for data in rx {
+        for sample in data {
+            yield_!(sample);
         }
-    })
+    }
 }
 
 mod tests {
@@ -74,9 +71,8 @@ mod tests {
         )?;
 
         let start = Instant::now();
-        let stream = getstream_from_mic(config, input_device);
-        pin_mut!(stream);
-        while let Some(c) = block_on(stream.next()) {
+        mk_gen!(let stream = getstream_from_mic(config, input_device));
+        for c in stream {
             if start.elapsed() > Duration::from_secs(5) {
                 break;
             }
