@@ -21,22 +21,18 @@ impl DefaultDenoise for [f32; DenoiseState::FRAME_SIZE] {
 }
 
 #[generator(yield(PCMUnit))]
-pub async fn getstream_denoise<
-    S: Pin<Generator<Yield = PCMUnit, Return = ()>> + Unpin + futures::Stream,
->(
-    mut input: S,
-) -> impl Stream<Item = PCMUnit> {
+pub async fn getstream_denoise(mut input: Pin<&mut dyn Generator<Yield = PCMUnit, Return = ()>>) {
     let denoise = std::sync::RwLock::new(DenoiseState::new());
     let mut frame_output: DenoiseChunk = DefaultDenoise::default();
     let mut frame_input: DenoiseChunk = DefaultDenoise::default();
     // fn_stream(|emitter| async move {
     //     'outer: loop {
     for s in &mut frame_input {
-        let mut next = || input.as_mut().resume(());
-        if let Some(next) = next() {
-            *s = next * 32768.0;
-        } else {
-            break;
+        match input.as_mut().resume(()) {
+            GeneratorState::Yielded(x) => {
+                *s = x * 32768.0;
+            }
+            GeneratorState::Returned(_) => break,
         }
     }
     denoise
@@ -54,7 +50,7 @@ pub async fn getstream_denoise<
 
     for chunk in scaled {
         for s in &chunk {
-            yield_!(s);
+            yield_!(*s);
             //emitter.emit(*s).await;
         }
     }
