@@ -46,6 +46,7 @@ impl From<PlayStreamError> for SpeakerError {
         SpeakerError::PlayStreamError { e }
     }
 }
+
 pub fn getstream_to_speaker<S>(
     config: StreamConfig,
     output_device: Device,
