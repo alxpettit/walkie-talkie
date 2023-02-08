@@ -1,4 +1,5 @@
 use crate::*;
+use std::pin::Pin;
 use std::sync::mpsc;
 
 use crate::pcmtypes::PCMUnit;
@@ -7,6 +8,7 @@ use cpal::traits::{DeviceTrait, StreamTrait};
 use cpal::{BuildStreamError, Device, PlayStreamError, StreamConfig, StreamError};
 use futures::StreamExt;
 use futures_core::Stream;
+use next_gen::prelude::*;
 use snafu::prelude::*;
 use std::sync::mpsc::{Receiver, SendError};
 
@@ -47,41 +49,34 @@ impl From<PlayStreamError> for SpeakerError {
     }
 }
 
-pub fn getstream_to_speaker<S>(
+#[generator(yield(PCMUnit))]
+pub fn getstream_to_speaker(
     config: StreamConfig,
     output_device: Device,
-    mut input: S,
-) -> (impl Stream<Item = PCMUnit>, Receiver<SpeakerError>)
-where
-    S: Stream<Item = PCMUnit> + Unpin,
-{
+    mut input: Pin<&mut dyn Generator<Yield = PCMUnit, Return = ()>>,
+) {
     let (tx_err, rx_err) = mpsc::channel::<SpeakerError>();
     let (tx, rx) = mpsc::channel::<f32>();
-    (
-        fn_stream(|emitter| async move {
-            let tx_err_ptr = tx_err.clone();
-            let out_stream = output_device
-                .build_output_stream(
-                    &config,
-                    move |output: &mut [f32], _| {
-                        for output_sample in output {
-                            *output_sample = rx.recv().unwrap();
-                        }
-                    },
-                    move |e| tx_err_ptr.send(e.into()).unwrap(),
-                )
-                .expect("Failed to build internal output stream.");
+    let tx_err_ptr = tx_err.clone();
+    let out_stream = output_device
+        .build_output_stream(
+            &config,
+            move |output: &mut [f32], _| {
+                for output_sample in output {
+                    *output_sample = rx.recv().unwrap();
+                }
+            },
+            move |e| tx_err_ptr.send(e.into()).unwrap(),
+        )
+        .expect("Failed to build internal output stream.");
 
-            out_stream
-                .play()
-                .expect("Failed to play internal output stream.");
+    out_stream
+        .play()
+        .expect("Failed to play internal output stream.");
 
-            while let Some(next_input) = input.next().await {
-                tx.send(next_input)
-                    .expect("Failed to send on internal MPSC.");
-                emitter.emit(next_input).await;
-            }
-        }),
-        rx_err,
-    )
+    for next_input in input {
+        tx.send(next_input)
+            .expect("Failed to send on internal MPSC.");
+        yield_!(next_input);
+    }
 }

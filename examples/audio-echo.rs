@@ -1,3 +1,5 @@
+use crate::mic::getstream_from_mic;
+use crate::speaker::getstream_to_speaker;
 use audio_stream::denoise::*;
 use audio_stream::fft::getstream_fft;
 use audio_stream::{denoise, mic, speaker};
@@ -5,6 +7,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, StreamConfig};
 use futures::{pin_mut, StreamExt};
 use futures_core::Stream;
+use next_gen::mk_gen;
 use nnnoiseless::DenoiseState;
 use std::error::Error;
 use std::sync::mpsc;
@@ -23,11 +26,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut config: cpal::StreamConfig = supported_config.into();
     config.sample_rate = cpal::SampleRate(88_200); // cpal::SampleRate(44_100);
 
-    let mic_stream = mic::getstream_from_mic(config.clone(), input_device);
-    pin_mut!(mic_stream);
+    mk_gen!(let mic_stream = getstream_from_mic(config.clone(), input_device));
 
-    let mic_stream = denoise::getstream_denoise(mic_stream);
-    pin_mut!(mic_stream);
+    mk_gen!(let denoised_mic_stream = getstream_denoise(mic_stream));
 
     let output_device = host
         .default_output_device()
@@ -41,9 +42,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     //     println!("{:#?}", buf);
     // }
 
-    let (stream_to_speaker, _) = speaker::getstream_to_speaker(config, output_device, mic_stream);
-    pin_mut!(stream_to_speaker);
-    while let Some(i) = stream_to_speaker.next().await {
+    mk_gen!(let stream_to_speaker = getstream_to_speaker(config, output_device, denoised_mic_stream));
+    for s in stream_to_speaker {
         // if let Err(e) = i {
         //     println!("{}", e);
         // }
