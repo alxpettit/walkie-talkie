@@ -5,6 +5,7 @@ use futures::StreamExt;
 use futures_core::Stream;
 use itertools::{repeat_n, Itertools};
 use next_gen::prelude::*;
+use pcmtypes::PCMGenerator;
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 use rustfft::FftPlanner;
@@ -12,7 +13,6 @@ use std::iter;
 use std::iter::repeat;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
-
 static BUFFER: usize = 256;
 
 pub fn normalize_buf(buf: &mut Vec<Complex<f32>>) {
@@ -47,7 +47,7 @@ pub async fn take_to_buffer(
 }
 
 #[generator(yield(PCMUnit))]
-pub async fn getstream_fft(mut input: Pin<&mut dyn Generator<Yield = PCMUnit, Return = ()>>) {
+pub async fn getstream_fft<'g>(mut input: PCMGenerator<'g>) {
     let mut buf: Vec<f32> = Vec::with_capacity(BUFFER);
     let mut planner = FftPlanner::new();
     let fft = planner.plan_fft_forward(buf.len());

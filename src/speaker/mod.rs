@@ -2,7 +2,7 @@ use crate::*;
 use std::pin::Pin;
 use std::sync::mpsc;
 
-use crate::pcmtypes::PCMUnit;
+use crate::pcmtypes::{PCMGenerator, PCMUnit};
 use async_fn_stream::{fn_stream, try_fn_stream};
 use cpal::traits::{DeviceTrait, StreamTrait};
 use cpal::{BuildStreamError, Device, PlayStreamError, StreamConfig, StreamError};
@@ -50,10 +50,10 @@ impl From<PlayStreamError> for SpeakerError {
 }
 
 #[generator(yield(PCMUnit))]
-pub fn getstream_to_speaker(
+pub fn getstream_to_speaker<'g>(
     config: StreamConfig,
     output_device: Device,
-    mut input: Pin<&mut dyn Generator<Yield = PCMUnit, Return = ()>>,
+    input: PCMGenerator<'g>,
 ) {
     let (tx_err, rx_err) = mpsc::channel::<SpeakerError>();
     let (tx, rx) = mpsc::channel::<f32>();

@@ -1,4 +1,4 @@
-use crate::pcmtypes::PCMUnit;
+use crate::pcmtypes::{PCMGenerator, PCMUnit};
 use crate::*;
 use async_fn_stream::{fn_stream, try_fn_stream};
 use futures::StreamExt;
@@ -21,7 +21,7 @@ impl DefaultDenoise for [f32; DenoiseState::FRAME_SIZE] {
 }
 
 #[generator(yield(PCMUnit))]
-pub async fn getstream_denoise(mut input: Pin<&mut dyn Generator<Yield = PCMUnit, Return = ()>>) {
+pub async fn getstream_denoise<'g>(mut input: PCMGenerator<'g>) {
     let denoise = std::sync::RwLock::new(DenoiseState::new());
     let mut frame_output: DenoiseChunk = DefaultDenoise::default();
     let mut frame_input: DenoiseChunk = DefaultDenoise::default();
