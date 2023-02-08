@@ -25,35 +25,23 @@ pub async fn getstream_denoise(mut input: Pin<&mut dyn Generator<Yield = PCMUnit
     let denoise = std::sync::RwLock::new(DenoiseState::new());
     let mut frame_output: DenoiseChunk = DefaultDenoise::default();
     let mut frame_input: DenoiseChunk = DefaultDenoise::default();
-    // fn_stream(|emitter| async move {
-    //     'outer: loop {
-    for s in &mut frame_input {
-        match input.as_mut().resume(()) {
-            GeneratorState::Yielded(x) => {
-                *s = x * 32768.0;
+
+    loop {
+        for s in &mut frame_input {
+            match input.as_mut().resume(()) {
+                GeneratorState::Yielded(x) => {
+                    *s = x * 32768.0;
+                }
+                GeneratorState::Returned(_) => break,
             }
-            GeneratorState::Returned(_) => break,
+        }
+        denoise
+            .write()
+            .unwrap()
+            .process_frame(&mut frame_output, &mut frame_input);
+
+        for s in frame_output {
+            yield_!(s / 32768.0);
         }
     }
-    denoise
-        .write()
-        .unwrap()
-        .process_frame(&mut frame_output, &mut frame_input);
-
-    let scaled: Vec<[f32; 8]> = frame_output
-        .chunks(8)
-        .map(|chunk| {
-            let scaled = f32x8::from(chunk) / 32768.0;
-            scaled.into()
-        })
-        .collect();
-
-    for chunk in scaled {
-        for s in &chunk {
-            yield_!(*s);
-            //emitter.emit(*s).await;
-        }
-    }
-    //    }
-    // })
 }
