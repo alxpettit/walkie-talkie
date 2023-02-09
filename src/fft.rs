@@ -75,7 +75,6 @@ pub async fn getstream_fft<'g>(mut input: PCMGenerator<'g>) {
         //     .collect::<Vec<_>>();
 
         // complex_buf = new_complex;
-        //complex_buf.
         ifft.process(&mut complex_buf);
         normalize_buf(&mut complex_buf);
         for r in complex2real(&complex_buf) {

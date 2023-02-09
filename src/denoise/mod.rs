@@ -26,13 +26,13 @@ pub async fn getstream_denoise<'g>(mut input: PCMGenerator<'g>) {
     let mut frame_output: DenoiseChunk = DefaultDenoise::default();
     let mut frame_input: DenoiseChunk = DefaultDenoise::default();
 
-    loop {
+    'outer: loop {
         for s in &mut frame_input {
             match input.as_mut().resume(()) {
                 GeneratorState::Yielded(x) => {
                     *s = x * 32768.0;
                 }
-                GeneratorState::Returned(_) => break,
+                GeneratorState::Returned(_) => break 'outer,
             }
         }
         denoise
