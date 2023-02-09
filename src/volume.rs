@@ -1,8 +1,12 @@
+use crate::pcmtypes::PCMGenerator;
+use crate::pcmtypes::*;
 use crate::*;
 use async_fn_stream::fn_stream;
 use futures_core::stream::Stream;
 use futures_util::StreamExt;
 use log::info;
+use next_gen::generator::GeneratorExt;
+use next_gen::prelude::*;
 use printrn::printrn;
 use std::fmt::{Display, Formatter};
 use std::iter::Sum;
@@ -134,59 +138,69 @@ pub fn sound_bar(p: &NormRatio, bar_length: u16) -> String {
             .to_string()
     )
 }
+//
+// #[derive(Clone)]
+// pub struct VolumeStreamBuilder {
+//     pub(crate) time_of_start: Instant,
+//     pub(crate) dur_of_display: Option<Duration>,
+//     pub(crate) every_n: u128,
+// }
+//
+// impl VolumeStreamBuilder {
+//     pub fn new() -> Self {
+//         Self {
+//             time_of_start: Instant::now(),
+//             dur_of_display: None,
+//             every_n: 0,
+//         }
+//     }
 
 #[derive(Clone)]
-pub struct VolumeStreamBuilder {
+pub struct VolumeConfig {
     pub(crate) time_of_start: Instant,
     pub(crate) dur_of_display: Option<Duration>,
     pub(crate) every_n: u128,
 }
 
-impl VolumeStreamBuilder {
-    pub fn new() -> Self {
-        Self {
-            time_of_start: Instant::now(),
-            dur_of_display: None,
-            every_n: 0,
+pub type PCMGeneratorVolume<'g> =
+    Pin<&'g mut dyn GeneratorExt<VolumeConfig, Yield = PCMUnit, Return = ()>>;
+
+#[generator(yield(PCMUnit))]
+pub async fn getstream_display_volume<'g>(mut mic_audio_stream: PCMGeneratorVolume<'g>) {
+    let mut chunk_num: u128 = u128::default();
+    // for await chunk in mic_audio_stream {
+    while let Some(chunk) = mic_audio_stream.next().await {
+        if *state.display.read().await {
+            if builder.dur_of_display.is_some()
+                && builder.time_of_start.elapsed() >= builder.dur_of_display.unwrap()
+            {
+                //*state.display.write().await = false;
+                info!("Display of microphone stream is disabled.");
+            }
+
+            if builder.every_n == 0 || (chunk_num % builder.every_n == 0) {
+                let db: Db = get_average_volume(&chunk);
+                let db_string = db.to_string();
+                let p: NormRatio = db.into();
+                printrn!(
+                    "{} {}",
+                    sound_bar(
+                        &p,
+                        state.term_size.read().await.x - db_string.len() as u16 - 1
+                    ),
+                    db_string
+                );
+            }
+        }
+
+        chunk_num = chunk_num.saturating_add(1);
+        for s in chunk {
+            let config = yield_!(s);
+            match config {
+                Some(StreamConfig) => {}
+                None => {}
+            }
         }
     }
-
-    pub async fn getstream_display_volume<S: Stream<Item = Chunk> + Unpin>(
-        &self,
-        mut mic_audio_stream: S,
-        state: Arc<ProgramState>,
-    ) -> impl Stream<Item = Chunk> {
-        let builder = self.clone();
-        fn_stream(|emitter| async move {
-            let mut chunk_num: u128 = u128::default();
-            // for await chunk in mic_audio_stream {
-            while let Some(chunk) = mic_audio_stream.next().await {
-                if *state.display.read().await {
-                    if builder.dur_of_display.is_some()
-                        && builder.time_of_start.elapsed() >= builder.dur_of_display.unwrap()
-                    {
-                        //*state.display.write().await = false;
-                        info!("Display of microphone stream is disabled.");
-                    }
-
-                    if builder.every_n == 0 || (chunk_num % builder.every_n == 0) {
-                        let db: Db = get_average_volume(&chunk);
-                        let db_string = db.to_string();
-                        let p: NormRatio = db.into();
-                        printrn!(
-                            "{} {}",
-                            sound_bar(
-                                &p,
-                                state.term_size.read().await.x - db_string.len() as u16 - 1
-                            ),
-                            db_string
-                        );
-                    }
-                }
-
-                chunk_num = chunk_num.saturating_add(1);
-                emitter.emit(chunk).await;
-            }
-        })
-    }
 }
+// }
