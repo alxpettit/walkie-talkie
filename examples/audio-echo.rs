@@ -27,7 +27,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     config.sample_rate = cpal::SampleRate(44_100);
 
     //let (tx, mut rx) = broadcast::channel::<f32>(10000);
-    let (s, r) = bounded(256);
+    let (s, r) = broadcast::channel(1000000);
 
     let mic_stream = mic(s.clone(), &config, &input_device)?;
 
@@ -36,7 +36,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let output_device = host
         .default_output_device()
         .ok_or("No default output device available!")?;
-    let out_stream = speaker(r.clone(), &config, &output_device);
+    let out_stream = speaker(r, &config, &output_device);
     out_stream.play().unwrap();
     loop {
         thread::sleep(Duration::from_secs(10000));
