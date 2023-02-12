@@ -1,4 +1,6 @@
+use audio_stream::mic;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::{Device, StreamConfig};
 use nnnoiseless::DenoiseState;
 use std::error::Error;
 use std::ops::Deref;
@@ -7,8 +9,7 @@ use std::thread;
 use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
-
-type Chunk = Vec<f32>;
+use tokio::sync::broadcast::Sender;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -24,20 +25,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut config: cpal::StreamConfig = supported_config.into();
     config.sample_rate = cpal::SampleRate(44_100);
 
-    let (tx, mut rx) = broadcast::channel::<f32>(480000);
+    let (tx, mut rx) = broadcast::channel::<f32>(10000);
 
-    let input_stream = cpal::Device::build_input_stream(
-        &input_device,
-        &config,
-        move |data: &[f32], _: &cpal::InputCallbackInfo| {
-            for sample in data.to_vec() {
-                tx.send(sample).expect("TODO: panic message");
-            }
-        },
-        move |_err| {},
-    )?;
-    input_stream.play().expect("TODO: panic message");
+    let mic_stream = mic(tx, &config, &input_device)?;
 
+    mic_stream.play()?;
     let output_device = host
         .default_output_device()
         .ok_or("No default output device available!")?;
