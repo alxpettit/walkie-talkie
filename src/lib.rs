@@ -1,6 +1,6 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Stream, StreamConfig};
-use crossbeam_channel::Sender;
+use crossbeam_channel::{Receiver, Sender};
 use nnnoiseless::DenoiseState;
 use std::error::Error;
 use std::ops::Deref;
@@ -28,4 +28,24 @@ pub fn mic(
         move |_err| {},
     )?;
     Ok(input_stream)
+}
+
+pub fn speaker(rx: Receiver<f32>, config: &StreamConfig, output_device: &Device) -> Stream {
+    output_device
+        .build_output_stream(
+            &config,
+            move |output: &mut [f32], _| {
+                for output_sample in output {
+                    // This had better be zero cost >.>
+                    match rx.recv() {
+                        Ok(sample) => {
+                            *output_sample = sample;
+                        }
+                        Err(_) => {}
+                    }
+                }
+            },
+            |_| {},
+        )
+        .expect("TODO: panic message")
 }

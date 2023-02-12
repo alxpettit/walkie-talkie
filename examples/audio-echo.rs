@@ -1,4 +1,4 @@
-use audio_stream::mic;
+use audio_stream::{mic, speaker};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, StreamConfig};
 use crossbeam_channel::bounded;
@@ -36,24 +36,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let output_device = host
         .default_output_device()
         .ok_or("No default output device available!")?;
-    let out_stream = output_device
-        .build_output_stream(
-            &config,
-            move |output: &mut [f32], _| {
-                for output_sample in output {
-                    // This had better be zero cost >.>
-                    match r.recv() {
-                        Ok(sample) => {
-                            *output_sample = sample;
-                        }
-                        Err(_) => {}
-                    }
-                }
-            },
-            |_| {},
-        )
-        .expect("TODO: panic message");
-
+    let out_stream = speaker(r.clone(), &config, &output_device);
     out_stream.play().unwrap();
     loop {
         thread::sleep(Duration::from_secs(10000));
