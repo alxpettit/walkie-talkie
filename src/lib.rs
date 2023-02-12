@@ -1,6 +1,6 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Stream, StreamConfig};
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::{bounded, Receiver, Sender};
 use nnnoiseless::DenoiseState;
 use std::error::Error;
 use std::ops::Deref;
@@ -10,24 +10,46 @@ use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
 
-type Chunk = Vec<f32>;
+struct Mic<T> {
+    senders: Vec<Sender<T>>,
+}
 
-pub fn mic(
-    tx: Sender<f32>,
-    config: &StreamConfig,
-    input_device: &Device,
-) -> Result<Stream, Box<dyn Error>> {
-    let input_stream = cpal::Device::build_input_stream(
-        &input_device,
-        &config,
-        move |data: &[f32], _: &cpal::InputCallbackInfo| {
-            for sample in data.to_vec() {
-                tx.send(sample).expect("TODO: panic message");
-            }
-        },
-        move |_err| {},
-    )?;
-    Ok(input_stream)
+impl<T> Default for Mic<T> {
+    fn default() -> Self {
+        Self {
+            senders: Vec::new(),
+        }
+    }
+}
+
+impl<T> Mic<T> {
+    pub fn new() -> Self {
+        Mic::default()
+    }
+
+    pub fn mk_stream(
+        tx: Sender<f32>,
+        config: &StreamConfig,
+        input_device: &Device,
+    ) -> Result<(Stream, Receiver<Box<dyn Error>>), Box<dyn Error>> {
+        let (s_err, r_err) = bounded(128);
+        let input_stream = cpal::Device::build_input_stream(
+            &input_device,
+            &config,
+            move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                for sample in data {
+                    // match tx.send(*sample) {
+                    //     Err(e) => {
+                    //         s_err.send(Box::new(e));
+                    //         s_err.send_deadline()
+                    //     }
+                    // }
+                }
+            },
+            move |_err| {},
+        )?;
+        Ok((input_stream, r_err))
+    }
 }
 
 pub fn speaker(rx: Receiver<f32>, config: &StreamConfig, output_device: &Device) -> Stream {

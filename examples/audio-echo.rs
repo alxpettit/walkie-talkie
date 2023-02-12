@@ -1,4 +1,4 @@
-use audio_stream::{mic, speaker};
+use audio_stream::{speaker, Mic};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, StreamConfig};
 use crossbeam_channel::bounded;
