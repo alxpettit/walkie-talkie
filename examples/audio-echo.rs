@@ -1,6 +1,7 @@
 use audio_stream::mic;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, StreamConfig};
+use crossbeam_channel::bounded;
 use nnnoiseless::DenoiseState;
 use std::error::Error;
 use std::ops::Deref;
@@ -25,11 +26,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut config: cpal::StreamConfig = supported_config.into();
     config.sample_rate = cpal::SampleRate(44_100);
 
-    let (tx, mut rx) = broadcast::channel::<f32>(10000);
+    //let (tx, mut rx) = broadcast::channel::<f32>(10000);
+    let (s, r) = bounded(256);
 
-    let mic_stream = mic(tx, &config, &input_device)?;
+    let mic_stream = mic(s.clone(), &config, &input_device)?;
 
     mic_stream.play()?;
+
     let output_device = host
         .default_output_device()
         .ok_or("No default output device available!")?;
@@ -39,7 +42,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             move |output: &mut [f32], _| {
                 for output_sample in output {
                     // This had better be zero cost >.>
-                    match futures::executor::block_on(rx.recv()) {
+                    match r.recv() {
                         Ok(sample) => {
                             *output_sample = sample;
                         }

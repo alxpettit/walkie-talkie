@@ -1,5 +1,6 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Stream, StreamConfig};
+use crossbeam_channel::Sender;
 use nnnoiseless::DenoiseState;
 use std::error::Error;
 use std::ops::Deref;
@@ -8,7 +9,6 @@ use std::thread;
 use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::broadcast::Sender;
 
 type Chunk = Vec<f32>;
 
