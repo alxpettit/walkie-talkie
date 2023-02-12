@@ -1,10 +1,11 @@
-use audio_stream::{mic, speaker};
+use audio_stream::{mic, print_broadcast, speaker};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, StreamConfig};
 use crossbeam_channel::bounded;
 use futures::executor::block_on;
 use nnnoiseless::DenoiseState;
 use std::error::Error;
+use std::future::poll_fn;
 use std::ops::Deref;
 use std::sync::mpsc;
 use std::thread;
@@ -12,6 +13,10 @@ use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Sender;
+
+async fn wait_forever() {
+    poll_fn::<(), _>(|_| std::task::Poll::Pending).await
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -31,20 +36,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let (s, r) = broadcast::channel(1000000);
 
     let mic_stream = mic(s.clone(), &config, &input_device)?;
-
-    let mut r2 = s.subscribe();
-
-    mic_stream.play()?;
-
     let output_device = host
         .default_output_device()
         .ok_or("No default output device available!")?;
     let out_stream = speaker(r, &config, &output_device);
-    out_stream.play().unwrap();
-    loop {
-        while let Ok(s) = block_on(r2.recv()) {
-            println!("{}", s);
-        }
-    }
+    print_broadcast(s.subscribe()).await;
+    mic_stream.play()?;
+    out_stream.play()?;
+    wait_forever().await;
     Ok(())
 }

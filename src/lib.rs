@@ -1,5 +1,6 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Stream, StreamConfig};
+use futures::executor::block_on;
 use nnnoiseless::DenoiseState;
 use std::error::Error;
 use std::ops::Deref;
@@ -53,4 +54,14 @@ pub fn speaker(mut rx: Receiver<f32>, config: &StreamConfig, output_device: &Dev
             |_| {},
         )
         .expect("TODO: panic message")
+}
+
+pub async fn print_broadcast(mut rx: Receiver<f32>) {
+    tokio::spawn(async move {
+        loop {
+            while let Ok(s) = block_on(rx.recv()) {
+                println!("{}", s);
+            }
+        }
+    });
 }
