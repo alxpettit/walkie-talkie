@@ -1,9 +1,11 @@
+pub mod dummy_streams;
+pub mod frames;
+
 use async_trait::async_trait;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Stream, StreamConfig};
 use futures::executor::block_on;
 use futures::SinkExt;
-use log::{error, trace};
 use nnnoiseless::DenoiseState;
 use std::error::Error;
 use std::ops::Deref;
@@ -13,21 +15,7 @@ use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::{RecvError, SendError};
 use tokio::sync::broadcast::{channel, Receiver, Sender};
-
-trait SendLogError<T> {
-    fn l_send(&mut self, value: T);
-}
-
-impl<T> SendLogError<T> for mpsc::Sender<T> {
-    fn l_send(self: &mut mpsc::Sender<T>, value: T) {
-        match self.send(value) {
-            Ok(_) => {}
-            Err(e) => {
-                error!("{}", e);
-            }
-        }
-    }
-}
+use tracing::{error, trace};
 
 pub fn mic(
     tx: Sender<f32>,

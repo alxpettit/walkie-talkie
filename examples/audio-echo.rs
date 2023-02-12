@@ -14,6 +14,7 @@ use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Sender;
+use tracing::Level;
 
 async fn wait_forever() {
     poll_fn::<(), _>(|_| std::task::Poll::Pending).await
@@ -21,6 +22,15 @@ async fn wait_forever() {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    let subscriber = FmtSubscriber::builder()
+        // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
+        // will be written to stdout.
+        .with_max_level(Level::TRACE)
+        // completes the builder.
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+
     let host = cpal::default_host();
     let input_device = host
         .default_input_device()
@@ -30,9 +40,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .next()
         .ok_or("Could not get the first supported config from range")?
         .with_max_sample_rate();
-    let mut config: cpal::StreamConfig = supported_config.into();
+    let mut config: StreamConfig = supported_config.into();
     config.sample_rate = cpal::SampleRate(48_000);
-
+    //
     let (s, r) = broadcast::channel(48000);
 
     let mic_stream = mic(s.clone(), &config, &input_device)?;
