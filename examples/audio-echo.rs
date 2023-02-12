@@ -27,7 +27,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let (tx, mut rx) = broadcast::channel::<f32>(10000);
 
-    let mic_stream = mic(&tx, &config, &input_device)?;
+    let mic_stream = mic(tx, &config, &input_device)?;
 
     mic_stream.play()?;
     let output_device = host

@@ -16,7 +16,7 @@ pub fn mic(
     tx: Sender<f32>,
     config: &StreamConfig,
     input_device: &Device,
-) -> Result<(Sender<f32>, Stream), Box<dyn Error>> {
+) -> Result<Stream, Box<dyn Error>> {
     let input_stream = cpal::Device::build_input_stream(
         &input_device,
         &config,
@@ -27,5 +27,5 @@ pub fn mic(
         },
         move |_err| {},
     )?;
-    Ok((tx, input_stream))
+    Ok(input_stream)
 }
