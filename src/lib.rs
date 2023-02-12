@@ -27,5 +27,5 @@ pub fn mic(
         },
         move |_err| {},
     )?;
-    Ok(tx, input_stream)
+    Ok((tx, input_stream))
 }
