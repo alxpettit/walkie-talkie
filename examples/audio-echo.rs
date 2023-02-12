@@ -33,14 +33,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut config: cpal::StreamConfig = supported_config.into();
     config.sample_rate = cpal::SampleRate(48_000);
 
-    //let (tx, mut rx) = broadcast::channel::<f32>(10000);
     let (s, r) = broadcast::channel(48000);
 
     let mic_stream = mic(s.clone(), &config, &input_device)?;
     let output_device = host
         .default_output_device()
         .ok_or("No default output device available!")?;
-    let out_stream = speaker(r, &config, &output_device);
+    let out_stream = speaker(r, &config, &output_device)?;
 
     print_broadcast(s.subscribe()).await;
     mic_stream.play()?;
