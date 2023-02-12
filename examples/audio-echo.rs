@@ -2,6 +2,7 @@ use audio_stream::{mic, speaker};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, StreamConfig};
 use crossbeam_channel::bounded;
+use futures::executor::block_on;
 use nnnoiseless::DenoiseState;
 use std::error::Error;
 use std::ops::Deref;
@@ -31,6 +32,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let mic_stream = mic(s.clone(), &config, &input_device)?;
 
+    let mut r2 = s.subscribe();
+
     mic_stream.play()?;
 
     let output_device = host
@@ -39,7 +42,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let out_stream = speaker(r, &config, &output_device);
     out_stream.play().unwrap();
     loop {
-        thread::sleep(Duration::from_secs(10000));
+        while let Ok(s) = block_on(r2.recv()) {
+            println!("{}", s);
+        }
     }
     Ok(())
 }
