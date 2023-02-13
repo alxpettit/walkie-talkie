@@ -8,6 +8,8 @@ use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::{SendError, TryRecvError};
 use tracing::{error, info, trace, warn, Instrument};
 
+mod dummy_generator;
+
 #[derive(Debug, Snafu, Eq, PartialEq)]
 enum BroadcastStreamError<T>
 where
@@ -32,41 +34,6 @@ impl<T> SendLogError<T> for mpsc::Sender<T> {
             }
         }
     }
-}
-
-pub fn repeat<T>(gen_tx: GenSender<T>, repeat_value: T)
-where
-    T: Send + Copy + 'static + Debug,
-{
-    thread::spawn(move || {
-        let mut requested = 0usize;
-        loop {
-            match gen_tx.req_from_consumer() {
-                Ok(GenReq::YieldN(new_requested)) => {
-                    requested = new_requested;
-                }
-                Ok(GenReq::Stop) => {
-                    break;
-                }
-                Ok(GenReq::Yield) => {
-                    requested = 1;
-                }
-                Err(e) => {
-                    warn!("Receiver hung up: {}", e);
-                }
-            }
-            for _ in 0..requested {
-                match gen_tx.send(repeat_value) {
-                    Ok(v) => {
-                        trace!("Successfully sent value. Receivers: {}", v)
-                    }
-                    Err(e) => {
-                        warn!("Failed to send value. Error: {}", e)
-                    }
-                }
-            }
-        }
-    });
 }
 
 pub enum GenReq {
@@ -94,11 +61,11 @@ impl<T> GenSender<T> {
         self.tx.subscribe()
     }
 
-    fn req_from_consumer(&self) -> Result<GenReq, mpsc::RecvError> {
+    pub(crate) fn req_from_consumer(&self) -> Result<GenReq, mpsc::RecvError> {
         self.req_rx.recv()
     }
 
-    fn send(&self, value: T) -> Result<usize, SendError<T>> {
+    pub(crate) fn send(&self, value: T) -> Result<usize, SendError<T>> {
         self.tx.send(value)
     }
 }
@@ -148,6 +115,7 @@ where
 
 mod tests {
     use super::*;
+    use dummy_generator::repeat;
     use futures::executor::block_on;
     use std::sync::atomic::AtomicUsize;
     use std::sync::Arc;
