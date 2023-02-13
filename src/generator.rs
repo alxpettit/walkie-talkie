@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use std::sync::mpsc;
 use std::{fmt, thread};
 use tokio::sync::broadcast;
-use tokio::sync::broadcast::error::SendError;
+use tokio::sync::broadcast::error::{SendError, TryRecvError};
 use tracing::{error, info, trace, warn, Instrument};
 
 #[derive(Debug, Snafu, Eq, PartialEq)]
@@ -128,6 +128,9 @@ where
     async fn recv(&mut self) -> Result<T, broadcast::error::RecvError> {
         self.rx.recv().await
     }
+    async fn try_recv(&mut self) -> Result<T, TryRecvError> {
+        self.rx.try_recv()
+    }
     async fn stop(&mut self) -> Result<(), mpsc::SendError<GenReq>> {
         self.req_tx.send(GenReq::Stop)
     }
@@ -163,11 +166,18 @@ mod tests {
         // Bulk requests are more efficient, as the generator can go at a different rate,
         // And fewer background MPSC ops are required
         gen_rx.req_n(3).unwrap();
+        // NOTE: If you call this too many times, it will await forever,
+        // because the generator is not running enough times :')
         assert_eq!(gen_rx.recv().await, Ok(10.));
         assert_eq!(gen_rx.recv().await, Ok(10.));
         assert_eq!(gen_rx.recv().await, Ok(10.));
+
+        // We get an error if we try to receive another one
+        assert!(gen_rx.try_recv().await.is_err());
+
         // More conventional generator-like behavior.
-        // Generator speed is capped at the speed of the consumer.
+        // Generator speed is capped at the speed of the consumer,
+        // and vice versa. They are tied together.
         assert_eq!(gen_rx.req_recv().await.unwrap(), 10.0);
         assert_eq!(gen_rx.req_recv().await.unwrap(), 10.0);
         assert_eq!(gen_rx.req_recv().await.unwrap(), 10.0);

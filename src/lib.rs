@@ -1,5 +1,5 @@
-pub mod dummy_streams;
 pub mod frames;
+pub mod generator;
 
 use async_trait::async_trait;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
