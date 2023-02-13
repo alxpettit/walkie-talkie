@@ -1,10 +1,11 @@
+use event_listener::{Event, EventListener};
 use snafu::prelude::*;
 use std::error::Error;
-use std::fmt;
 use std::fmt::Debug;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc};
+use std::{fmt, thread};
 use tokio::sync::broadcast::Sender;
-use tracing::{error, trace, Instrument};
+use tracing::{error, info, trace, warn, Instrument};
 use tracing_subscriber;
 
 #[derive(Debug, Snafu)]
@@ -33,43 +34,47 @@ impl<T> SendLogError<T> for mpsc::Sender<T> {
     }
 }
 
-pub async fn repeat<T>(s: Sender<T>, repeat_value: T)
+pub fn repeat<T>(s: Sender<T>, req_event: mpsc::Receiver<()>, repeat_value: T)
 where
     T: Send + Copy + 'static + Debug,
 {
-    tokio::spawn(async move {
-        let r = s.subscribe();
-        while r.is_empty() {
-            match s.send(repeat_value) {
-                Ok(v) => {
-                    trace!("Successfully sent value. Receivers: {}", v)
-                }
-                Err(e) => {
-                    error!("Failed to send value. Error: {}", e)
-                }
+    thread::spawn(move || loop {
+        match req_event.recv() {
+            Ok(_) => {}
+            Err(e) => {
+                info!("Receiver hung up");
+            }
+        }
+        match s.send(repeat_value) {
+            Ok(v) => {
+                trace!("Successfully sent value. Receivers: {}", v)
+            }
+            Err(e) => {
+                warn!("Failed to send value. Error: {}", e)
             }
         }
     });
 }
 
-// tokio::spawn(async move {
-// loop {
-// while let Ok(s) = block_on(rx.recv()) {
-// println!("{}", s);
-// }
-// }
-// });
-
 mod tests {
     use super::*;
     use futures::executor::block_on;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::Arc;
     use tokio::sync::broadcast;
     use tokio::sync::broadcast::channel;
 
     #[test_log::test(tokio::test)]
     async fn test_repeat() {
         let (s, mut r) = channel(128);
-        repeat(s, 10.0).await;
+        let (event_tx, event_rx) = mpsc::channel();
+        //let request: Arc<AtomicUsize> = Arc::new(AtomicUsize::default());
+        repeat(s.clone(), event_rx, 10.0);
+        event_tx.send(()).unwrap();
+        event_tx.send(()).unwrap();
+        event_tx.send(()).unwrap();
+        assert_eq!(r.recv().await, Ok(10.));
+        assert_eq!(r.recv().await, Ok(10.));
         assert_eq!(r.recv().await, Ok(10.));
     }
 }
