@@ -1,4 +1,6 @@
-use event_listener::EventListener;
+mod dummy_generator;
+
+use dummy_generator::repeat;
 use snafu::prelude::*;
 use std::error::Error;
 use std::fmt::Debug;
@@ -7,8 +9,6 @@ use std::{fmt, thread};
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::{SendError, TryRecvError};
 use tracing::{error, info, trace, warn, Instrument};
-
-mod dummy_generator;
 
 #[derive(Debug, Snafu, Eq, PartialEq)]
 enum BroadcastStreamError<T>
@@ -114,13 +114,6 @@ where
 }
 
 mod tests {
-    use super::*;
-    use dummy_generator::repeat;
-    use futures::executor::block_on;
-    use std::sync::atomic::AtomicUsize;
-    use std::sync::Arc;
-    use tokio::sync::broadcast;
-    use tokio::sync::broadcast::channel;
 
     #[test_log::test(tokio::test)]
     async fn test_repeat() {
