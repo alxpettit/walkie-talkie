@@ -1,15 +1,14 @@
-use event_listener::{Event, EventListener};
+use event_listener::EventListener;
 use snafu::prelude::*;
 use std::error::Error;
 use std::fmt::Debug;
-use std::sync::{mpsc, Arc};
+use std::sync::mpsc;
 use std::{fmt, thread};
 use tokio::sync::broadcast;
-use tokio::sync::broadcast::Sender;
+use tokio::sync::broadcast::error::SendError;
 use tracing::{error, info, trace, warn, Instrument};
-use tracing_subscriber;
 
-#[derive(Debug, Snafu)]
+#[derive(Debug, Snafu, Eq, PartialEq)]
 enum BroadcastStreamError<T>
 where
     T: fmt::Display,
@@ -35,23 +34,29 @@ impl<T> SendLogError<T> for mpsc::Sender<T> {
     }
 }
 
-pub fn repeat<T>(s: Sender<T>, req_event: mpsc::Receiver<usize>, repeat_value: T)
+pub fn repeat<T>(gen_tx: GenSender<T>, repeat_value: T)
 where
     T: Send + Copy + 'static + Debug,
 {
     thread::spawn(move || {
         let mut requested = 0usize;
         loop {
-            match req_event.recv() {
-                Ok(new_requested) => {
+            match gen_tx.req_from_consumer() {
+                Ok(GenReq::YieldN(new_requested)) => {
                     requested = new_requested;
+                }
+                Ok(GenReq::Stop) => {
+                    break;
+                }
+                Ok(GenReq::Yield) => {
+                    requested = 1;
                 }
                 Err(e) => {
                     warn!("Receiver hung up: {}", e);
                 }
             }
             for _ in 0..requested {
-                match s.send(repeat_value) {
+                match gen_tx.send(repeat_value) {
                     Ok(v) => {
                         trace!("Successfully sent value. Receivers: {}", v)
                     }
@@ -64,20 +69,68 @@ where
     });
 }
 
-enum GenReq {
+pub enum GenReq {
     Yield,
     YieldN(usize),
     Stop,
 }
 
-struct GenSender<T> {
+/// A wrapper around a tokio broadcast channel, and a MPSC, allowing two way communication
+/// between a generator-like function and a consumer function.
+pub struct GenSender<T> {
+    // a transmitter for broadcasting our generated values
     tx: broadcast::Sender<T>,
+    // a receiver for receiving transmissions from consumer functions
     req_rx: mpsc::Receiver<GenReq>,
+}
+
+impl<T> GenSender<T> {
+    /// Clone transmitter so that we can send broadcasts on this channel, or subscribe more receivers
+    fn clone_tx(&self) -> broadcast::Sender<T> {
+        self.tx.clone()
+    }
+    /// Subscribe a receiver from the internal transmitter
+    fn subscribe(&self) -> broadcast::Receiver<T> {
+        self.tx.subscribe()
+    }
+
+    fn req_from_consumer(&self) -> Result<GenReq, mpsc::RecvError> {
+        self.req_rx.recv()
+    }
+
+    fn send(&self, value: T) -> Result<usize, SendError<T>> {
+        self.tx.send(value)
+    }
 }
 
 struct GenReceiver<T> {
     rx: broadcast::Receiver<T>,
     req_tx: mpsc::Sender<GenReq>,
+}
+
+impl<T> GenReceiver<T>
+where
+    T: Clone,
+{
+    fn clone_req_tx(&self) -> mpsc::Sender<GenReq> {
+        self.req_tx.clone()
+    }
+    fn req(&self) -> Result<(), mpsc::SendError<GenReq>> {
+        self.req_tx.send(GenReq::Yield)
+    }
+    fn req_n(&self, num: usize) -> Result<(), mpsc::SendError<GenReq>> {
+        self.req_tx.send(GenReq::YieldN(num))
+    }
+    async fn req_recv(&mut self) -> Result<T, Box<dyn Error>> {
+        self.req()?;
+        Ok(self.recv().await?)
+    }
+    async fn recv(&mut self) -> Result<T, broadcast::error::RecvError> {
+        self.rx.recv().await
+    }
+    async fn stop(&mut self) -> Result<(), mpsc::SendError<GenReq>> {
+        self.req_tx.send(GenReq::Stop)
+    }
 }
 
 fn gen_channel<T>(capacity: usize) -> (GenSender<T>, GenReceiver<T>)
@@ -100,13 +153,23 @@ mod tests {
 
     #[test_log::test(tokio::test)]
     async fn test_repeat() {
-        let (s, mut r) = channel(128);
-        let (event_tx, event_rx) = mpsc::channel();
-        //let request: Arc<AtomicUsize> = Arc::new(AtomicUsize::default());
-        repeat(s.clone(), event_rx, 10.0);
-        event_tx.send(3).unwrap();
-        assert_eq!(r.recv().await, Ok(10.));
-        assert_eq!(r.recv().await, Ok(10.));
-        assert_eq!(r.recv().await, Ok(10.));
+        let (gen_tx, mut gen_rx) = gen_channel::<f32>(128);
+        let tx = gen_tx.clone_tx();
+
+        // We can 'tap' into our receiver
+        let rx = tx.subscribe();
+
+        repeat(gen_tx, 10.0);
+        // Bulk requests are more efficient, as the generator can go at a different rate,
+        // And fewer background MPSC ops are required
+        gen_rx.req_n(3).unwrap();
+        assert_eq!(gen_rx.recv().await, Ok(10.));
+        assert_eq!(gen_rx.recv().await, Ok(10.));
+        assert_eq!(gen_rx.recv().await, Ok(10.));
+        // More conventional generator-like behavior.
+        // Generator speed is capped at the speed of the consumer.
+        assert_eq!(gen_rx.req_recv().await.unwrap(), 10.0);
+        assert_eq!(gen_rx.req_recv().await.unwrap(), 10.0);
+        assert_eq!(gen_rx.req_recv().await.unwrap(), 10.0);
     }
 }
