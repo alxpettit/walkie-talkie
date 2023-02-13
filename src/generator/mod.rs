@@ -1,6 +1,5 @@
-mod dummy_generator;
+pub mod dummy_generator;
 
-use dummy_generator::repeat;
 use snafu::prelude::*;
 use std::error::Error;
 use std::fmt::Debug;
@@ -114,6 +113,7 @@ where
 }
 
 mod tests {
+    use super::*;
 
     #[test_log::test(tokio::test)]
     async fn test_repeat() {
@@ -123,7 +123,7 @@ mod tests {
         // We can 'tap' into our receiver
         let rx = tx.subscribe();
 
-        repeat(gen_tx, 10.0);
+        dummy_generator::repeat(gen_tx, 10.0);
         // Bulk requests are more efficient, as the generator can chug along at a different rate
         // in its own thread, and fewer background MPSC ops are required
         gen_rx.req_n(3).unwrap();
