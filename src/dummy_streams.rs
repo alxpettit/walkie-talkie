@@ -4,6 +4,7 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::sync::{mpsc, Arc};
 use std::{fmt, thread};
+use tokio::sync::broadcast;
 use tokio::sync::broadcast::Sender;
 use tracing::{error, info, trace, warn, Instrument};
 use tracing_subscriber;
@@ -34,26 +35,59 @@ impl<T> SendLogError<T> for mpsc::Sender<T> {
     }
 }
 
-pub fn repeat<T>(s: Sender<T>, req_event: mpsc::Receiver<()>, repeat_value: T)
+pub fn repeat<T>(s: Sender<T>, req_event: mpsc::Receiver<usize>, repeat_value: T)
 where
     T: Send + Copy + 'static + Debug,
 {
-    thread::spawn(move || loop {
-        match req_event.recv() {
-            Ok(_) => {}
-            Err(e) => {
-                info!("Receiver hung up");
+    thread::spawn(move || {
+        let mut requested = 0usize;
+        loop {
+            match req_event.recv() {
+                Ok(new_requested) => {
+                    requested = new_requested;
+                }
+                Err(e) => {
+                    warn!("Receiver hung up: {}", e);
+                }
             }
-        }
-        match s.send(repeat_value) {
-            Ok(v) => {
-                trace!("Successfully sent value. Receivers: {}", v)
-            }
-            Err(e) => {
-                warn!("Failed to send value. Error: {}", e)
+            for _ in 0..requested {
+                match s.send(repeat_value) {
+                    Ok(v) => {
+                        trace!("Successfully sent value. Receivers: {}", v)
+                    }
+                    Err(e) => {
+                        warn!("Failed to send value. Error: {}", e)
+                    }
+                }
             }
         }
     });
+}
+
+enum GenReq {
+    Yield,
+    YieldN(usize),
+    Stop,
+}
+
+struct GenSender<T> {
+    tx: broadcast::Sender<T>,
+    req_rx: mpsc::Receiver<GenReq>,
+}
+
+struct GenReceiver<T> {
+    rx: broadcast::Receiver<T>,
+    req_tx: mpsc::Sender<GenReq>,
+}
+
+fn gen_channel<T>(capacity: usize) -> (GenSender<T>, GenReceiver<T>)
+where
+    T: Clone,
+{
+    let (tx, mut rx) = broadcast::channel::<T>(capacity);
+    let (req_tx, req_rx) = mpsc::channel::<GenReq>();
+
+    (GenSender { tx, req_rx }, GenReceiver { rx, req_tx })
 }
 
 mod tests {
@@ -70,9 +104,7 @@ mod tests {
         let (event_tx, event_rx) = mpsc::channel();
         //let request: Arc<AtomicUsize> = Arc::new(AtomicUsize::default());
         repeat(s.clone(), event_rx, 10.0);
-        event_tx.send(()).unwrap();
-        event_tx.send(()).unwrap();
-        event_tx.send(()).unwrap();
+        event_tx.send(3).unwrap();
         assert_eq!(r.recv().await, Ok(10.));
         assert_eq!(r.recv().await, Ok(10.));
         assert_eq!(r.recv().await, Ok(10.));
