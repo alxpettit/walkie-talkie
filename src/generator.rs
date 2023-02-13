@@ -163,8 +163,8 @@ mod tests {
         let rx = tx.subscribe();
 
         repeat(gen_tx, 10.0);
-        // Bulk requests are more efficient, as the generator can go at a different rate,
-        // And fewer background MPSC ops are required
+        // Bulk requests are more efficient, as the generator can chug along at a different rate
+        // in its own thread, and fewer background MPSC ops are required
         gen_rx.req_n(3).unwrap();
         // NOTE: If you call this too many times, it will await forever,
         // because the generator is not running enough times :')
